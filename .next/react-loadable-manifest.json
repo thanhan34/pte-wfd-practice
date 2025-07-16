@@ -1,0 +1,33 @@
+{
+  "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
+    "id": 472,
+    "files": [
+      "static/chunks/472.a3826d29d6854395.js"
+    ]
+  },
+  "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_error": {
+    "id": 9341,
+    "files": [
+      "static/chunks/341.716d46e6e5cb6bdc.js"
+    ]
+  },
+  "lib\\database.ts -> ./firestore": {
+    "id": 9086,
+    "files": [
+      "static/chunks/bc9e92e6-b16b20b10552a794.js",
+      "static/chunks/ae6eea6a-5cd543b42d7d647c.js",
+      "static/chunks/645-708bb7dea1a043bd.js",
+      "static/chunks/86.4b5bb4500163c8a0.js"
+    ]
+  },
+  "lib\\database.ts -> ./firestore-fallback": {
+    "id": 4799,
+    "files": [
+      "static/chunks/799.83e43564376252d5.js"
+    ]
+  },
+  "lib\\firebase.ts -> firebase/firestore": {
+    "id": 5317,
+    "files": []
+  }
+}
