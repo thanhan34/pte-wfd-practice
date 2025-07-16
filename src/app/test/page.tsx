@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function TestPage() {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
@@ -8,12 +10,12 @@ export default function TestPage() {
         <p className="text-gray-600 mb-8">
           This is a simple test page to verify routing works.
         </p>
-        <a
+        <Link
           href="/"
           className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
         >
           Back to Home
-        </a>
+        </Link>
       </div>
     </div>
   );
