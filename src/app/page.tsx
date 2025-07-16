@@ -1,52 +1,66 @@
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-orange-600 mb-2">
-            Phòng luyện đánh máy
-          </h1>
-          <h2 className="text-xl text-orange-500 mb-4">
-            Nhóm thời gian thực
-          </h2>
-          <p className="text-gray-600">
-            Luyện kỹ năng gõ chính xác cho PTE Write From Dictation
-          </p>
+    <div style={{ 
+      minHeight: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      fontFamily: 'Arial, sans-serif',
+      background: 'linear-gradient(135deg, #fff7ed 0%, #ffffff 100%)'
+    }}>
+      <div style={{ textAlign: 'center', maxWidth: '500px', padding: '20px' }}>
+        <h1 style={{ color: '#ea580c', fontSize: '2rem', marginBottom: '1rem' }}>
+          Phòng luyện đánh máy
+        </h1>
+        <h2 style={{ color: '#fb923c', fontSize: '1.5rem', marginBottom: '1rem' }}>
+          Nhóm thời gian thực
+        </h2>
+        <p style={{ color: '#6b7280', marginBottom: '2rem' }}>
+          Luyện kỹ năng gõ chính xác cho PTE Write From Dictation
+        </p>
+        
+        <div style={{ 
+          backgroundColor: 'white', 
+          borderRadius: '8px', 
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', 
+          padding: '2rem',
+          marginBottom: '2rem'
+        }}>
+          <h3 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>
+            Chọn vai trò của bạn
+          </h3>
+          
+          <button style={{
+            width: '100%',
+            backgroundColor: '#ea580c',
+            color: 'white',
+            padding: '1rem',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '1.1rem',
+            marginBottom: '1rem',
+            cursor: 'pointer'
+          }}>
+            🎯 Tạo phòng (Host)
+          </button>
+          
+          <button style={{
+            width: '100%',
+            backgroundColor: '#fed7aa',
+            color: '#ea580c',
+            padding: '1rem',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '1.1rem',
+            cursor: 'pointer'
+          }}>
+            👥 Tham gia phòng
+          </button>
         </div>
 
-        {/* Main Card */}
-        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-center mb-6">
-              Chọn vai trò của bạn
-            </h3>
-            
-            <button className="w-full bg-orange-600 hover:bg-orange-500 text-white font-medium py-4 px-4 rounded-lg transition-colors duration-200 text-lg">
-              🎯 Tạo phòng (Host)
-            </button>
-            
-            <button className="w-full bg-orange-100 hover:bg-orange-200 text-orange-600 font-medium py-4 px-4 rounded-lg transition-colors duration-200 text-lg">
-              👥 Tham gia phòng
-            </button>
-
-            <div className="mt-6 p-4 bg-orange-50 rounded-lg">
-              <h4 className="font-semibold text-orange-600 mb-2">
-                Cách sử dụng:
-              </h4>
-              <ul className="text-sm text-gray-700 space-y-1">
-                <li>• <strong>Host:</strong> Tạo phòng và đặt câu mẫu</li>
-                <li>• <strong>Người tham gia:</strong> Nghe và gõ lại câu</li>
-                <li>• Hệ thống sẽ chấm điểm theo chuẩn PTE WFD</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
+        <div style={{ fontSize: '0.9rem', color: '#6b7280' }}>
           <p>Ứng dụng luyện tập PTE Write From Dictation</p>
-          <p className="mt-1">Phiên bản thời gian thực</p>
+          <p>Phiên bản thời gian thực</p>
         </div>
       </div>
     </div>
