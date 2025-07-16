@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Minimal configuration for Vercel deployment
-  trailingSlash: false,
-  swcMinify: true
+  trailingSlash: false
 }
 
 module.exports = nextConfig
