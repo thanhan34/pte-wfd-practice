@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { 
   subscribeToRoom, 
   setTargetPhrase, 
   submitAnswer, 
   updateTypingStatus, 
   leaveRoom,
-  getCurrentUser 
+  getCurrentUser,
+  joinRoom
 } from '@/lib/database';
 import { Room, User, ParticipantData } from '@/types';
 import { getUserStatus, debounce } from '@/lib/utils';
@@ -22,6 +23,7 @@ import VoiceChat from '@/components/VoiceChat';
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const roomId = params.roomId as string;
 
   const [room, setRoom] = useState<Room | null>(null);
@@ -29,6 +31,7 @@ export default function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isHost, setIsHost] = useState(false);
+  const [hasJoinedRoom, setHasJoinedRoom] = useState(false);
 
   // Debounced typing status update
   const debouncedUpdateTypingStatus = useCallback(
@@ -43,8 +46,40 @@ export default function RoomPage() {
     [roomId]
   );
 
+  // Handle URL parameters and auto-join room for participants
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || hasJoinedRoom) return;
+
+    const role = searchParams.get('role');
+    const name = searchParams.get('name');
+
+    // If this is a participant trying to join
+    if (role === 'participant' && name) {
+      const handleJoinRoom = async () => {
+        try {
+          setLoading(true);
+          await joinRoom(roomId, decodeURIComponent(name));
+          setHasJoinedRoom(true);
+          console.log(`✅ Participant ${name} joined room ${roomId}`);
+        } catch (err: any) {
+          console.error('Error joining room:', err);
+          setError(err.message || 'Không thể tham gia phòng');
+          setLoading(false);
+        }
+      };
+
+      handleJoinRoom();
+    } else if (role === 'host') {
+      // Host is already in the room from creation
+      setHasJoinedRoom(true);
+    } else {
+      // No valid role/name parameters, might be direct access
+      setHasJoinedRoom(true);
+    }
+  }, [roomId, searchParams, hasJoinedRoom]);
+
+  useEffect(() => {
+    if (!roomId || !hasJoinedRoom) return;
 
     let unsubscribe: (() => void) | null = null;
 
@@ -93,7 +128,7 @@ export default function RoomPage() {
         unsubscribe();
       }
     };
-  }, [roomId, router]);
+  }, [roomId, router, hasJoinedRoom]);
 
   const handleSetTargetPhrase = async (phrase: string) => {
     try {
