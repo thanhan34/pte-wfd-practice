@@ -106,7 +106,7 @@ export default function ParticipantsList({
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="text-xl">
+                <span className={`text-xl ${participant.status === 'typing' ? 'animate-typing' : ''}`}>
                   {getStatusIcon(participant.status)}
                 </span>
                 <div>
@@ -135,7 +135,7 @@ export default function ParticipantsList({
 
               <div className="flex items-center gap-2">
                 <div className="text-right">
-                  <span className={getStatusClass(participant.status)}>
+                  <span className={`${getStatusClass(participant.status)} animate-status-change`}>
                     {getStatusText(participant.status)}
                   </span>
                   

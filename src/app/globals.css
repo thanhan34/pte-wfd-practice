@@ -26,18 +26,135 @@
   }
   
   .status-correct {
-    @apply text-green-600 bg-green-50 px-2 py-1 rounded-full text-sm font-medium;
+    @apply text-green-600 bg-green-50 px-2 py-1 rounded-full text-sm font-medium transition-all duration-300;
   }
   
   .status-incorrect {
-    @apply text-red-600 bg-red-50 px-2 py-1 rounded-full text-sm font-medium;
+    @apply text-red-600 bg-red-50 px-2 py-1 rounded-full text-sm font-medium transition-all duration-300;
   }
   
   .status-typing {
-    @apply text-blue-600 bg-blue-50 px-2 py-1 rounded-full text-sm font-medium;
+    @apply text-blue-600 bg-blue-50 px-2 py-1 rounded-full text-sm font-medium transition-all duration-300;
   }
   
   .status-waiting {
-    @apply text-gray-600 bg-gray-50 px-2 py-1 rounded-full text-sm font-medium;
+    @apply text-gray-600 bg-gray-50 px-2 py-1 rounded-full text-sm font-medium transition-all duration-300;
+  }
+
+  /* Animation cho typing indicator */
+  .typing-indicator {
+    animation: typing-pulse 1.5s ease-in-out infinite;
+  }
+
+  /* Animation cho celebration khi đúng */
+  .celebration-bounce {
+    animation: celebration-bounce 0.6s ease-out;
+  }
+
+  .celebration-glow {
+    animation: celebration-glow 1s ease-out;
+  }
+
+  /* Animation cho rank change */
+  .rank-change-up {
+    animation: rank-up 0.8s ease-out;
+  }
+
+  .rank-change-down {
+    animation: rank-down 0.8s ease-out;
+  }
+
+  .rank-highlight {
+    animation: rank-highlight 2s ease-out;
+  }
+
+  /* Animation cho status change */
+  .status-change {
+    animation: status-change 0.5s ease-out;
+  }
+
+  /* Particle effect cho celebration */
+  .celebration-particle {
+    animation: particle-float 1.5s ease-out forwards;
+  }
+}
+
+@layer utilities {
+  /* Keyframes cho animations */
+  @keyframes typing-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+  }
+
+  @keyframes celebration-bounce {
+    0% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.2) rotate(-5deg); }
+    50% { transform: scale(1.3) rotate(5deg); }
+    75% { transform: scale(1.1) rotate(-2deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  @keyframes celebration-glow {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+    50% { box-shadow: 0 0 20px 10px rgba(34, 197, 94, 0.2); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
+
+  @keyframes rank-up {
+    0% { transform: translateY(0) scale(1); background-color: rgb(249 250 251); }
+    25% { transform: translateY(-10px) scale(1.05); background-color: rgb(254 218 194); }
+    50% { transform: translateY(-5px) scale(1.02); background-color: rgb(255 172 123); }
+    100% { transform: translateY(0) scale(1); }
+  }
+
+  @keyframes rank-down {
+    0% { transform: translateY(0) scale(1); background-color: rgb(249 250 251); }
+    25% { transform: translateY(10px) scale(0.95); background-color: rgb(254 202 202); }
+    50% { transform: translateY(5px) scale(0.98); background-color: rgb(252 165 165); }
+    100% { transform: translateY(0) scale(1); }
+  }
+
+  @keyframes rank-highlight {
+    0% { background-color: rgb(249 250 251); }
+    20% { background-color: rgb(254 218 194); }
+    100% { background-color: rgb(249 250 251); }
+  }
+
+  @keyframes status-change {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes particle-float {
+    0% { 
+      transform: translateY(0) scale(1) rotate(0deg); 
+      opacity: 1; 
+    }
+    100% { 
+      transform: translateY(-50px) scale(0.5) rotate(180deg); 
+      opacity: 0; 
+    }
+  }
+
+  /* Utility classes cho animations */
+  .animate-typing {
+    animation: typing-pulse 1.5s ease-in-out infinite;
+  }
+
+  .animate-celebration {
+    animation: celebration-bounce 0.6s ease-out, celebration-glow 1s ease-out;
+  }
+
+  .animate-rank-up {
+    animation: rank-up 0.8s ease-out;
+  }
+
+  .animate-rank-down {
+    animation: rank-down 0.8s ease-out;
+  }
+
+  .animate-status-change {
+    animation: status-change 0.5s ease-out;
   }
 }

@@ -18,12 +18,14 @@ interface HostControlsProps {
   room: Room;
   participants: ParticipantWithStatus[];
   onSetTargetPhrase: (phrase: string) => Promise<void>;
+  onToggleShowPhrase: (show: boolean) => Promise<void>;
 }
 
 export default function HostControls({ 
   room, 
   participants, 
-  onSetTargetPhrase 
+  onSetTargetPhrase,
+  onToggleShowPhrase
 }: HostControlsProps) {
   const [targetPhrase, setTargetPhrase] = useState('');
   const [phraseList, setPhraseList] = useState<string[]>([]);
@@ -231,16 +233,94 @@ export default function HostControls({
     }
   };
 
-  // Statistics
-  const totalParticipants = participants.length;
-  const waitingCount = participants.filter(p => p.status === 'waiting').length;
-  const typingCount = participants.filter(p => p.status === 'typing').length;
-  const submittedCount = participants.filter(p => p.status === 'correct' || p.status === 'incorrect').length;
-  const correctCount = participants.filter(p => p.status === 'correct').length;
+  // Statistics - Exclude host from all statistics
+  const participantsOnly = participants.filter(p => p.id !== room.hostId);
+  const totalParticipants = participantsOnly.length;
+  const waitingCount = participantsOnly.filter(p => p.status === 'waiting').length;
+  const typingCount = participantsOnly.filter(p => p.status === 'typing').length;
+  const submittedCount = participantsOnly.filter(p => p.status === 'correct' || p.status === 'incorrect').length;
+  const correctCount = participantsOnly.filter(p => p.status === 'correct').length;
 
+  // Statistics Component
+  const StatisticsPanel = () => (
+    <div className="card bg-gradient-to-r from-white to-[#fedac2] border-2 border-[#fc5d01] shadow-lg">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-xl font-bold text-[#fc5d01] flex items-center gap-2">
+          📊 Thống kê thời gian thực
+        </h3>
+        {room.targetPhrase && (
+          <div className="text-xs text-[#fc5d01] bg-[#fedac2] px-3 py-1 rounded-full font-medium">
+            Câu {room.currentPhraseIndex !== undefined ? room.currentPhraseIndex + 1 : '?'}/{phraseList.length}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="text-center p-4 bg-white rounded-xl shadow-md border-2 border-gray-200 hover:border-[#fc5d01] transition-colors">
+          <div className="text-3xl font-bold text-gray-800 mb-1">{totalParticipants}</div>
+          <div className="text-sm font-medium text-gray-600">Tổng số</div>
+        </div>
+        
+        <div className="text-center p-4 bg-blue-50 rounded-xl shadow-md border-2 border-blue-200 hover:border-blue-400 transition-colors">
+          <div className="text-3xl font-bold text-blue-600 mb-1">{typingCount}</div>
+          <div className="text-sm font-medium text-blue-600">Đang gõ</div>
+        </div>
+        
+        <div className="text-center p-4 bg-[#fedac2] rounded-xl shadow-md border-2 border-[#fdbc94] hover:border-[#fc5d01] transition-colors">
+          <div className="text-3xl font-bold text-[#fc5d01] mb-1">{submittedCount}</div>
+          <div className="text-sm font-medium text-[#fd7f33]">Đã gửi</div>
+        </div>
+        
+        <div className="text-center p-4 bg-green-50 rounded-xl shadow-md border-2 border-green-200 hover:border-green-400 transition-colors">
+          <div className="text-3xl font-bold text-green-600 mb-1">{correctCount}</div>
+          <div className="text-sm font-medium text-green-600">Đúng hết</div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {totalParticipants > 0 && (
+        <div className="mb-4">
+          <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
+            <span>Tiến độ hoàn thành</span>
+            <span className="text-[#fc5d01] font-bold">{submittedCount}/{totalParticipants}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-4 shadow-inner border border-gray-300">
+            <div
+              className="bg-gradient-to-r from-[#fd7f33] to-[#fc5d01] h-4 rounded-full transition-all duration-500 ease-out shadow-sm"
+              style={{ width: `${(submittedCount / totalParticipants) * 100}%` }}
+            ></div>
+          </div>
+          <div className="text-xs text-gray-600 mt-2 text-center font-medium">
+            {((submittedCount / totalParticipants) * 100).toFixed(1)}% hoàn thành
+          </div>
+        </div>
+      )}
+
+      {/* Accuracy summary */}
+      {submittedCount > 0 && (
+        <div className="pt-4 border-t-2 border-[#fdbc94]">
+          <h4 className="text-sm font-semibold text-[#fc5d01] mb-3 flex items-center gap-2">
+            🎯 Tóm tắt độ chính xác
+          </h4>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="bg-green-50 p-3 rounded-lg border-2 border-green-200 hover:border-green-400 transition-colors">
+              <div className="font-bold text-green-800 text-lg">{correctCount} người</div>
+              <div className="text-green-600 font-medium">Đúng hoàn toàn ({((correctCount / submittedCount) * 100).toFixed(1)}%)</div>
+            </div>
+            <div className="bg-red-50 p-3 rounded-lg border-2 border-red-200 hover:border-red-400 transition-colors">
+              <div className="font-bold text-red-800 text-lg">{submittedCount - correctCount} người</div>
+              <div className="text-red-600 font-medium">Có sai sót ({(((submittedCount - correctCount) / submittedCount) * 100).toFixed(1)}%)</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
+      {/* Statistics Panel - Moved to top */}
+      <StatisticsPanel />
       {/* WFD Phrase Management */}
       <div className="card">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -399,6 +479,40 @@ export default function HostControls({
                 </div>
               )}
             </div>
+            
+            {/* Toggle show phrase to participants */}
+            <div className="mt-4 pt-4 border-t border-primary-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-primary-700">
+                    👁️ Hiển thị câu cho người tham gia:
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    room.showPhraseToParticipants 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {room.showPhraseToParticipants ? '✅ Đang hiển thị' : '❌ Đang ẩn'}
+                  </span>
+                </div>
+                <button
+                  onClick={() => onToggleShowPhrase(!room.showPhraseToParticipants)}
+                  className={`text-xs px-4 py-2 rounded-lg font-medium transition-colors ${
+                    room.showPhraseToParticipants
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  {room.showPhraseToParticipants ? '🙈 Ẩn câu' : '👁️ Hiện câu'}
+                </button>
+              </div>
+              <div className="text-xs text-primary-600 mt-2">
+                {room.showPhraseToParticipants 
+                  ? '💡 Người tham gia có thể thấy câu mẫu để tham khảo'
+                  : '💡 Người tham gia không thể thấy câu mẫu, phải gõ từ trí nhớ'
+                }
+              </div>
+            </div>
           </div>
         )}
 
@@ -464,63 +578,6 @@ export default function HostControls({
         </div>
       </div>
 
-      {/* Statistics Section */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Thống kê thời gian thực
-        </h3>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-3 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-gray-800">{totalParticipants}</div>
-            <div className="text-sm text-gray-600">Tổng số</div>
-          </div>
-          
-          <div className="text-center p-3 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">{typingCount}</div>
-            <div className="text-sm text-blue-600">Đang gõ</div>
-          </div>
-          
-          <div className="text-center p-3 bg-yellow-50 rounded-lg">
-            <div className="text-2xl font-bold text-yellow-600">{submittedCount}</div>
-            <div className="text-sm text-yellow-600">Đã gửi</div>
-          </div>
-          
-          <div className="text-center p-3 bg-green-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">{correctCount}</div>
-            <div className="text-sm text-green-600">Đúng hết</div>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        {totalParticipants > 0 && (
-          <div className="mb-4">
-            <div className="flex justify-between text-sm text-gray-600 mb-2">
-              <span>Tiến độ hoàn thành</span>
-              <span>{submittedCount}/{totalParticipants}</span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div
-                className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(submittedCount / totalParticipants) * 100}%` }}
-              ></div>
-            </div>
-          </div>
-        )}
-
-        {/* Accuracy summary */}
-        {submittedCount > 0 && (
-          <div className="pt-4 border-t border-gray-200">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">
-              Tóm tắt độ chính xác:
-            </h4>
-            <div className="text-sm text-gray-600">
-              <div>• {correctCount} người đúng hoàn toàn ({((correctCount / submittedCount) * 100).toFixed(1)}%)</div>
-              <div>• {submittedCount - correctCount} người có sai sót ({(((submittedCount - correctCount) / submittedCount) * 100).toFixed(1)}%)</div>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Instructions */}
       <div className="card bg-primary-50 border-primary-200">

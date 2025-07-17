@@ -98,7 +98,8 @@ export async function createRoom(hostNickname: string): Promise<string> {
     },
     isCountingDown: false,
     currentPhraseIndex: 0,
-    shouldPlayAudio: false
+    shouldPlayAudio: false,
+    showPhraseToParticipants: false
   };
 
   roomsData[roomId] = room;
@@ -313,6 +314,28 @@ export function subscribeToRoom(
       listeners[roomId] = listeners[roomId].filter(cb => cb !== callback);
     }
   };
+}
+
+/**
+ * Toggle show phrase to participants (fallback)
+ */
+export async function toggleShowPhraseToParticipants(roomId: string, show: boolean): Promise<void> {
+  loadFromStorage();
+  const user = await authenticateUser();
+  
+  const room = roomsData[roomId];
+  if (!room) {
+    throw new Error('Room not found');
+  }
+
+  if (room.hostId !== user.id) {
+    throw new Error('Only host can toggle phrase visibility');
+  }
+
+  room.showPhraseToParticipants = show;
+  roomsData[roomId] = room;
+  saveToStorage();
+  notifyListeners(roomId);
 }
 
 /**

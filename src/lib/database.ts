@@ -123,6 +123,15 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 /**
+ * Toggle show phrase to participants (host only)
+ */
+export async function toggleShowPhraseToParticipants(roomId: string, show: boolean): Promise<void> {
+  await ensureInitialized();
+  const dbModule = useFirebase ? firestoreModule : fallbackModule;
+  return dbModule.toggleShowPhraseToParticipants(roomId, show);
+}
+
+/**
  * Check if using Firebase or fallback
  */
 export async function isUsingFirebase(): Promise<boolean> {

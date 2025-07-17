@@ -9,7 +9,8 @@ import {
   updateTypingStatus, 
   leaveRoom,
   getCurrentUser,
-  joinRoom
+  joinRoom,
+  toggleShowPhraseToParticipants
 } from '@/lib/database';
 import { Room, User, ParticipantData } from '@/types';
 import { getUserStatus, debounce } from '@/lib/utils';
@@ -135,6 +136,15 @@ export default function RoomPage() {
       await setTargetPhrase(roomId, phrase);
     } catch (err: any) {
       setError(err.message || 'Không thể đặt câu mẫu');
+    }
+  };
+
+  const handleToggleShowPhrase = async (show: boolean) => {
+    try {
+      // We'll need to implement this function in database.ts
+      await toggleShowPhraseToParticipants(roomId, show);
+    } catch (err: any) {
+      setError(err.message || 'Không thể thay đổi trạng thái hiển thị câu');
     }
   };
 
@@ -269,6 +279,7 @@ export default function RoomPage() {
                 room={room}
                 participants={participants}
                 onSetTargetPhrase={handleSetTargetPhrase}
+                onToggleShowPhrase={handleToggleShowPhrase}
               />
             ) : (
               <ParticipantInterface

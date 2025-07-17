@@ -31,6 +31,7 @@ export interface Room {
   roundStartTime?: Date; // Thời gian bắt đầu round (sau countdown)
   currentPhraseIndex?: number; // Index của câu hiện tại trong global phraseList
   shouldPlayAudio?: boolean; // Signal để phát audio cho participants
+  showPhraseToParticipants?: boolean; // Host có thể bật/tắt hiển thị câu cho participants
 }
 
 export interface AccuracyResult {

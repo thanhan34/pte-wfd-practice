@@ -69,7 +69,8 @@ function documentToRoom(doc: QueryDocumentSnapshot<DocumentData>): Room {
     isCountingDown: data.isCountingDown || false,
     roundStartTime: data.roundStartTime ? timestampToDate(data.roundStartTime) : undefined,
     currentPhraseIndex: data.currentPhraseIndex,
-    shouldPlayAudio: data.shouldPlayAudio || false
+    shouldPlayAudio: data.shouldPlayAudio || false,
+    showPhraseToParticipants: data.showPhraseToParticipants || false
   };
 }
 
@@ -424,6 +425,35 @@ export function subscribeToRoom(
     console.error('Error listening to room updates:', error);
     callback(null);
   });
+}
+
+/**
+ * Toggle show phrase to participants (host only)
+ */
+export async function toggleShowPhraseToParticipants(roomId: string, show: boolean): Promise<void> {
+  try {
+    const user = auth.currentUser;
+    if (!user) throw new Error('User not authenticated');
+
+    const roomRef = doc(db, 'rooms', roomId);
+    const roomDoc = await getDoc(roomRef);
+
+    if (!roomDoc.exists()) {
+      throw new Error('Room not found');
+    }
+
+    const roomData = roomDoc.data();
+    if (roomData.hostId !== user.uid) {
+      throw new Error('Only host can toggle phrase visibility');
+    }
+
+    await updateDoc(roomRef, {
+      showPhraseToParticipants: show
+    });
+  } catch (error) {
+    console.error('Error toggling phrase visibility:', error);
+    throw error;
+  }
 }
 
 /**

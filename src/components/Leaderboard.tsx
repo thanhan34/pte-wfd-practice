@@ -1,4 +1,5 @@
 import { ParticipantData } from '@/types';
+import { useState, useEffect } from 'react';
 
 interface LeaderboardEntry {
   id: string;
@@ -18,8 +19,13 @@ interface LeaderboardProps {
 }
 
 export default function Leaderboard({ participants, hostId, currentUserId }: LeaderboardProps) {
+  const [previousRanks, setPreviousRanks] = useState<{ [userId: string]: number }>({});
+  const [rankChanges, setRankChanges] = useState<{ [userId: string]: 'up' | 'down' | 'same' }>({});
+
   // Convert participants to leaderboard entries and sort by correct count and speed
+  // Exclude host from leaderboard
   const leaderboardEntries: LeaderboardEntry[] = Object.entries(participants)
+    .filter(([userId]) => userId !== hostId) // Loại host ra khỏi xếp hạng
     .map(([userId, participant]) => ({
       id: userId,
       nickname: participant.nickname,
@@ -50,6 +56,40 @@ export default function Leaderboard({ participants, hostId, currentUserId }: Lea
       // Fallback to accuracy
       return b.accuracy - a.accuracy;
     });
+
+  // Track rank changes for animations
+  useEffect(() => {
+    const currentRanks: { [userId: string]: number } = {};
+    const newRankChanges: { [userId: string]: 'up' | 'down' | 'same' } = {};
+
+    leaderboardEntries.forEach((entry, index) => {
+      const currentRank = index + 1;
+      currentRanks[entry.id] = currentRank;
+      
+      const previousRank = previousRanks[entry.id];
+      if (previousRank !== undefined) {
+        if (currentRank < previousRank) {
+          newRankChanges[entry.id] = 'up';
+        } else if (currentRank > previousRank) {
+          newRankChanges[entry.id] = 'down';
+        } else {
+          newRankChanges[entry.id] = 'same';
+        }
+      } else {
+        newRankChanges[entry.id] = 'same';
+      }
+    });
+
+    setRankChanges(newRankChanges);
+    setPreviousRanks(currentRanks);
+
+    // Clear rank change animations after 2 seconds
+    const timer = setTimeout(() => {
+      setRankChanges({});
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [leaderboardEntries.map(e => `${e.id}-${e.correctCount}`).join(',')]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -85,20 +125,35 @@ export default function Leaderboard({ participants, hostId, currentUserId }: Lea
           {leaderboardEntries.map((entry, index) => {
             const rank = index + 1;
             const isCurrentUser = entry.id === currentUserId;
+            const rankChange = rankChanges[entry.id];
             
             return (
               <div
                 key={entry.id}
-                className={`p-3 border rounded-lg transition-colors ${
+                className={`p-3 border rounded-lg transition-all duration-500 ${
                   isCurrentUser 
                     ? 'border-primary-300 bg-primary-50' 
                     : getRankColor(rank)
+                } ${
+                  rankChange === 'up' ? 'animate-rank-up' : 
+                  rankChange === 'down' ? 'animate-rank-down' : ''
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="text-lg font-bold min-w-[40px]">
+                    <div className="text-lg font-bold min-w-[40px] relative">
                       {getRankIcon(rank)}
+                      {/* Rank change indicator */}
+                      {rankChange === 'up' && (
+                        <div className="absolute -top-1 -right-1 text-green-500 text-xs animate-bounce">
+                          ↗️
+                        </div>
+                      )}
+                      {rankChange === 'down' && (
+                        <div className="absolute -top-1 -right-1 text-red-500 text-xs animate-bounce">
+                          ↘️
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex-1">
