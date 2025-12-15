@@ -302,6 +302,7 @@ export default function RoomPage() {
             currentUserId={currentUser.id}
             isHost={isHost}
             roomId={room.id}
+            targetPhrase={room.targetPhrase}
           />
 
           {/* Main Interface */}

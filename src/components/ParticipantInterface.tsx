@@ -217,6 +217,123 @@ export default function ParticipantInterface({
     }
   };
 
+  // Render inline feedback with highlighted words
+  const renderInlineFeedback = (accuracy: AccuracyResult) => {
+    if (!room.targetPhrase || !currentParticipant?.submission) return null;
+
+    const targetWords = room.targetPhrase.toLowerCase().split(/\s+/);
+    const submittedWords = currentParticipant.submission.toLowerCase().split(/\s+/);
+    
+    // Create word status map
+    const correctSet = new Set(accuracy.correct.map(w => w.toLowerCase()));
+    const incorrectSet = new Set(accuracy.incorrect.map(w => w.toLowerCase()));
+    const missingSet = new Set(accuracy.missing.map(w => w.toLowerCase()));
+    const extraSet = new Set(accuracy.extra.map(w => w.toLowerCase()));
+
+    // Render target phrase with missing words in parentheses and red
+    const targetPhraseElements = targetWords.map((word, index) => {
+      if (correctSet.has(word)) {
+        return (
+          <span key={`target-${index}`} className="text-green-600 font-semibold">
+            {word}{index < targetWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      } else if (missingSet.has(word)) {
+        // Missing words shown in parentheses with red color
+        return (
+          <span key={`target-${index}`} className="text-red-600 font-semibold">
+            ({word}){index < targetWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      } else {
+        return (
+          <span key={`target-${index}`}>
+            {word}{index < targetWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      }
+    });
+
+    // Render submitted answer with wrong/extra words highlighted
+    const submittedElements = submittedWords.map((word, index) => {
+      if (correctSet.has(word)) {
+        return (
+          <span key={`submitted-${index}`} className="text-green-600 font-semibold">
+            {word}{index < submittedWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      } else if (incorrectSet.has(word)) {
+        return (
+          <span key={`submitted-${index}`} className="text-[#fc5d01] font-semibold">
+            {word}{index < submittedWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      } else if (extraSet.has(word)) {
+        // Extra words shown with strikethrough and brown color
+        return (
+          <span key={`submitted-${index}`} className="text-[#8B4513] font-semibold line-through">
+            {word}{index < submittedWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      } else {
+        return (
+          <span key={`submitted-${index}`}>
+            {word}{index < submittedWords.length - 1 ? ' ' : ''}
+          </span>
+        );
+      }
+    });
+
+    return (
+      <div className="space-y-4">
+        {/* Target phrase with inline highlights */}
+        <div className="p-4 bg-white rounded-lg border-2 border-gray-200">
+          <h4 className="font-medium text-gray-800 mb-2 text-sm">
+            Câu gốc:
+          </h4>
+          <div className="text-lg leading-relaxed">
+            {targetPhraseElements}
+          </div>
+        </div>
+
+        {/* Submitted answer with inline highlights */}
+        <div className="p-4 bg-white rounded-lg border-2 border-gray-200">
+          <h4 className="font-medium text-gray-800 mb-2 text-sm">
+            Câu của bạn:
+          </h4>
+          <div className="text-lg leading-relaxed">
+            {submittedElements}
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h4 className="font-medium text-gray-800 mb-3 text-sm">
+            Chú thích:
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-green-600 font-semibold">Đúng:</span>
+              <span className="text-sm text-gray-600">{accuracy.correct.length}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[#fc5d01] font-semibold">Sai:</span>
+              <span className="text-sm text-gray-600">{accuracy.incorrect.length}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-red-600 font-semibold">(Thiếu):</span>
+              <span className="text-sm text-gray-600">{accuracy.missing.length}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[#8B4513] font-semibold">Thừa:</span>
+              <span className="text-sm text-gray-600">{accuracy.extra.length}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderAccuracyResult = (accuracy: AccuracyResult) => {
     return (
       <div className="space-y-4">
@@ -273,62 +390,8 @@ export default function ParticipantInterface({
           </div>
         </div>
 
-        {/* Detailed breakdown */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {accuracy.correct.length > 0 && (
-            <div className="p-3 bg-green-50 rounded-lg">
-              <h4 className="font-medium text-green-800 mb-2">
-                ✅ Từ đúng ({accuracy.correct.length})
-              </h4>
-              <div className="text-sm text-green-700">
-                {accuracy.correct.join(', ')}
-              </div>
-            </div>
-          )}
-
-          {accuracy.incorrect.length > 0 && (
-            <div className="p-3 bg-red-50 rounded-lg">
-              <h4 className="font-medium text-red-800 mb-2">
-                ❌ Từ sai ({accuracy.incorrect.length})
-              </h4>
-              <div className="text-sm text-red-700">
-                {accuracy.incorrect.join(', ')}
-              </div>
-            </div>
-          )}
-
-          {accuracy.missing.length > 0 && (
-            <div className="p-3 bg-orange-50 rounded-lg">
-              <h4 className="font-medium text-orange-800 mb-2">
-                ⚠️ Từ thiếu ({accuracy.missing.length})
-              </h4>
-              <div className="text-sm text-orange-700">
-                {accuracy.missing.join(', ')}
-              </div>
-            </div>
-          )}
-
-          {accuracy.extra.length > 0 && (
-            <div className="p-3 bg-purple-50 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-2">
-                ➕ Từ thừa ({accuracy.extra.length})
-              </h4>
-              <div className="text-sm text-purple-700">
-                {accuracy.extra.join(', ')}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Your answer */}
-        <div className="p-3 bg-gray-50 rounded-lg">
-          <h4 className="font-medium text-gray-800 mb-2">
-            Câu trả lời của bạn:
-          </h4>
-          <div className="text-sm text-gray-700 italic">
-            &quot;{currentParticipant?.submission}&quot;
-          </div>
-        </div>
+        {/* Inline feedback instead of separate boxes */}
+        {renderInlineFeedback(accuracy)}
       </div>
     );
   };

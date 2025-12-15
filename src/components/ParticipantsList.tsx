@@ -18,13 +18,15 @@ interface ParticipantsListProps {
   currentUserId: string;
   isHost: boolean;
   roomId: string;
+  targetPhrase?: string; // Add target phrase for inline feedback
 }
 
 export default function ParticipantsList({ 
   participants, 
   currentUserId, 
   isHost,
-  roomId
+  roomId,
+  targetPhrase
 }: ParticipantsListProps) {
   const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
 
@@ -192,49 +194,84 @@ export default function ParticipantsList({
               </div>
             </div>
 
-            {/* Show accuracy details for host */}
-            {isHost && participant.accuracy && participant.submission && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <div className="text-xs text-gray-600 mb-2">
-                  <strong>Câu trả lời:</strong> &quot;{participant.submission}&quot;
+            {/* Show inline accuracy details for host */}
+            {isHost && participant.accuracy && participant.submission && targetPhrase && (
+              <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
+                {/* Target phrase with inline highlights */}
+                <div className="p-2 bg-white rounded border border-gray-200">
+                  <div className="text-xs text-gray-600 mb-1 font-medium">Câu gốc:</div>
+                  <div className="text-sm">
+                    {targetPhrase.toLowerCase().split(/\s+/).map((word, index) => {
+                      const correctSet = new Set(participant.accuracy!.correct.map(w => w.toLowerCase()));
+                      const missingSet = new Set(participant.accuracy!.missing.map(w => w.toLowerCase()));
+                      
+                      if (correctSet.has(word)) {
+                        return (
+                          <span key={`target-${index}`} className="text-green-600 font-semibold">
+                            {word}{index < targetPhrase.toLowerCase().split(/\s+/).length - 1 ? ' ' : ''}
+                          </span>
+                        );
+                      } else if (missingSet.has(word)) {
+                        // Missing words shown in parentheses with red color
+                        return (
+                          <span key={`target-${index}`} className="text-red-600 font-semibold">
+                            ({word}){index < targetPhrase.toLowerCase().split(/\s+/).length - 1 ? ' ' : ''}
+                          </span>
+                        );
+                      } else {
+                        return (
+                          <span key={`target-${index}`}>
+                            {word}{index < targetPhrase.toLowerCase().split(/\s+/).length - 1 ? ' ' : ''}
+                          </span>
+                        );
+                      }
+                    })}
+                  </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {participant.accuracy.correct.length > 0 && (
-                    <div>
-                      <span className="text-green-600 font-medium">Đúng:</span>
-                      <div className="text-green-700">
-                        {participant.accuracy.correct.join(', ')}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {participant.accuracy.incorrect.length > 0 && (
-                    <div>
-                      <span className="text-red-600 font-medium">Sai:</span>
-                      <div className="text-red-700">
-                        {participant.accuracy.incorrect.join(', ')}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {participant.accuracy.missing.length > 0 && (
-                    <div>
-                      <span className="text-orange-600 font-medium">Thiếu:</span>
-                      <div className="text-orange-700">
-                        {participant.accuracy.missing.join(', ')}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {participant.accuracy.extra.length > 0 && (
-                    <div>
-                      <span className="text-purple-600 font-medium">Thừa:</span>
-                      <div className="text-purple-700">
-                        {participant.accuracy.extra.join(', ')}
-                      </div>
-                    </div>
-                  )}
+
+                {/* Submitted answer with inline highlights - showing target structure with missing words */}
+                <div className="p-2 bg-white rounded border border-red-600">
+                  <div className="text-xs text-gray-600 mb-1 font-medium">Câu của {participant.nickname}:</div>
+                  <div className="text-sm">
+                    {(() => {
+                      const targetWords = targetPhrase.toLowerCase().split(/\s+/);
+                      const submissionWords = participant.submission!.toLowerCase().split(/\s+/);
+                      
+                      // Create a working copy of submission words to track usage
+                      const availableWords = [...submissionWords];
+                      
+                      return targetWords.map((targetWord, index) => {
+                        // Find matching word in available submission words
+                        const foundIndex = availableWords.findIndex(w => w === targetWord);
+                        
+                        if (foundIndex !== -1) {
+                          // Word found in submission - mark as used and show in green
+                          availableWords.splice(foundIndex, 1);
+                          return (
+                            <span key={`inline-${index}`} className="text-green-600 font-semibold">
+                              {targetWord}{index < targetWords.length - 1 ? ' ' : ''}
+                            </span>
+                          );
+                        } else {
+                          // Word not found - show in red parentheses
+                          return (
+                            <span key={`inline-${index}`}>
+                              <span className="text-red-600 font-semibold">({targetWord})</span>
+                              {index < targetWords.length - 1 ? ' ' : ''}
+                            </span>
+                          );
+                        }
+                      });
+                    })()}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-3 text-xs pt-1">
+                  <span className="text-green-600 font-semibold">Đúng: {participant.accuracy.correct.length}</span>
+                  <span className="text-[#fc5d01] font-semibold">Sai: {participant.accuracy.incorrect.length}</span>
+                  <span className="text-red-600 font-semibold">Thiếu: {participant.accuracy.missing.length}</span>
+                  <span className="text-[#8B4513] font-semibold">Thừa: {participant.accuracy.extra.length}</span>
                 </div>
               </div>
             )}
