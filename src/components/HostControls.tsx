@@ -198,6 +198,42 @@ export default function HostControls({
     }
   };
 
+  // Text-to-speech fallback
+  const speakPhraseWithTTS = useCallback((phrase: string) => {
+    if ('speechSynthesis' in window && phrase) {
+      setIsPlayingAudio(true);
+      
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(phrase);
+      
+      // Configure speech settings
+      utterance.rate = 0.8; // Slightly slower for better comprehension
+      utterance.volume = 0.8;
+      utterance.pitch = 1;
+      
+      // Try to use English voice
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(voice => 
+        voice.lang.startsWith('en') || voice.name.toLowerCase().includes('english')
+      );
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+      
+      utterance.onend = () => {
+        setIsPlayingAudio(false);
+      };
+      
+      utterance.onerror = () => {
+        setIsPlayingAudio(false);
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  }, []);
+
   // Play audio file or use text-to-speech for host
   const playAudio = useCallback(() => {
     if (!room.targetPhrase) return;
@@ -247,43 +283,7 @@ export default function HostControls({
       // No audioUrl provided, use TTS
       speakPhraseWithTTS(room.targetPhrase);
     }
-  }, [room.targetPhrase, room.audioUrl]);
-
-  // Text-to-speech fallback
-  const speakPhraseWithTTS = useCallback((phrase: string) => {
-    if ('speechSynthesis' in window && phrase) {
-      setIsPlayingAudio(true);
-      
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(phrase);
-      
-      // Configure speech settings
-      utterance.rate = 0.8; // Slightly slower for better comprehension
-      utterance.volume = 0.8;
-      utterance.pitch = 1;
-      
-      // Try to use English voice
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(voice => 
-        voice.lang.startsWith('en') || voice.name.toLowerCase().includes('english')
-      );
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-      }
-      
-      utterance.onend = () => {
-        setIsPlayingAudio(false);
-      };
-      
-      utterance.onerror = () => {
-        setIsPlayingAudio(false);
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    }
-  }, []);
+  }, [room.targetPhrase, room.audioUrl, speakPhraseWithTTS]);
 
   return (
     <div className="space-y-6">

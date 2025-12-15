@@ -139,7 +139,7 @@ export default function DetailedStatistics({ room, hostId }: DetailedStatisticsP
                   </div>
                 </div>
                 <div className="text-sm text-gray-800 font-medium">
-                  "{phraseData.phrase}"
+                  &quot;{phraseData.phrase}&quot;
                 </div>
                 <div className="text-xs text-gray-500 mt-1">
                   {phraseData.participantCount} người đã thử
@@ -275,21 +275,21 @@ export default function DetailedStatistics({ room, hostId }: DetailedStatisticsP
 
                                 {/* Phrase and answer */}
                                 <div className="space-y-2">
-                                  <div className="p-2 bg-white rounded border">
-                                    <div className="text-xs font-medium text-gray-600 mb-1">📝 Câu gốc:</div>
-                                    <div className="text-sm font-medium text-gray-800">
-                                      "{submission.phrase}"
-                                    </div>
-                                  </div>
+                  <div className="p-2 bg-white rounded border">
+                    <div className="text-xs font-medium text-gray-600 mb-1">📝 Câu gốc:</div>
+                    <div className="text-sm font-medium text-gray-800">
+                      &quot;{submission.phrase}&quot;
+                    </div>
+                  </div>
                                   
-                                  <div className="p-2 bg-white rounded border">
-                                    <div className="text-xs font-medium text-gray-600 mb-1">💬 Câu trả lời:</div>
-                                    <div className={`text-sm font-medium ${
-                                      submission.accuracy.isFullyCorrect ? 'text-green-800' : 'text-red-800'
-                                    }`}>
-                                      "{submission.answer}"
-                                    </div>
-                                  </div>
+                  <div className="p-2 bg-white rounded border">
+                    <div className="text-xs font-medium text-gray-600 mb-1">💬 Câu trả lời:</div>
+                    <div className={`text-sm font-medium ${
+                      submission.accuracy.isFullyCorrect ? 'text-green-800' : 'text-red-800'
+                    }`}>
+                      &quot;{submission.answer}&quot;
+                    </div>
+                  </div>
                                 </div>
 
                                 {/* Error details if incorrect */}

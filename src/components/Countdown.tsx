@@ -41,6 +41,42 @@ export default function Countdown({ targetPhrase, audioUrl, countdownStartedAt, 
     return () => clearInterval(timer);
   }, [countdownStartedAt, onComplete]);
 
+  // Text-to-speech fallback function
+  const speakPhraseWithTTS = useCallback(() => {
+    if ('speechSynthesis' in window && targetPhrase) {
+      setIsReading(true);
+      
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(targetPhrase);
+      
+      // Configure speech settings
+      utterance.rate = 0.8; // Slightly slower for better comprehension
+      utterance.volume = 0.8;
+      utterance.pitch = 1;
+      
+      // Try to use English voice
+      const voices = window.speechSynthesis.getVoices();
+      const englishVoice = voices.find(voice => 
+        voice.lang.startsWith('en') || voice.name.toLowerCase().includes('english')
+      );
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+      }
+      
+      utterance.onend = () => {
+        setIsReading(false);
+      };
+      
+      utterance.onerror = () => {
+        setIsReading(false);
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [targetPhrase]);
+
   // Play audio or use text-to-speech
   const playAudio = useCallback(() => {
     setIsReading(true);
@@ -88,43 +124,7 @@ export default function Countdown({ targetPhrase, audioUrl, countdownStartedAt, 
       // No audioUrl provided, use TTS
       speakPhraseWithTTS();
     }
-  }, [audioUrl, targetPhrase]);
-  
-  // Text-to-speech fallback function
-  const speakPhraseWithTTS = useCallback(() => {
-    if ('speechSynthesis' in window && targetPhrase) {
-      setIsReading(true);
-      
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(targetPhrase);
-      
-      // Configure speech settings
-      utterance.rate = 0.8; // Slightly slower for better comprehension
-      utterance.volume = 0.8;
-      utterance.pitch = 1;
-      
-      // Try to use English voice
-      const voices = window.speechSynthesis.getVoices();
-      const englishVoice = voices.find(voice => 
-        voice.lang.startsWith('en') || voice.name.toLowerCase().includes('english')
-      );
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-      }
-      
-      utterance.onend = () => {
-        setIsReading(false);
-      };
-      
-      utterance.onerror = () => {
-        setIsReading(false);
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    }
-  }, [targetPhrase]);
+  }, [audioUrl, speakPhraseWithTTS]);
 
   // Auto-play audio when countdown reaches 1
   useEffect(() => {
