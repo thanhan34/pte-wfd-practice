@@ -99,8 +99,18 @@ export default function WritefromDictionExample() {
         {randomItem && (
           <div className="mt-4 p-4 rounded" style={{ backgroundColor: '#fedac2' }}>
             <p className="font-semibold">ID: {randomItem.id}</p>
+            {randomItem.text && <p className="mt-2">Text: {randomItem.text}</p>}
             {randomItem.content && <p className="mt-2">Content: {randomItem.content}</p>}
-            {randomItem.audio && <p className="mt-2">Audio: {randomItem.audio}</p>}
+            {randomItem.audio && (
+              <div className="mt-2">
+                <p className="font-medium">Audio voices available:</p>
+                <ul className="list-disc list-inside text-sm">
+                  {Object.entries(randomItem.audio).map(([voice, url]) => (
+                    <li key={voice}>{voice}: {url ? '✅' : '❌'}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -123,6 +133,11 @@ export default function WritefromDictionExample() {
               <p className="font-semibold text-sm mb-2" style={{ color: '#fd7f33' }}>
                 {item.id}
               </p>
+              {item.text && (
+                <p className="text-sm text-gray-700 line-clamp-3">
+                  {item.text}
+                </p>
+              )}
               {item.content && (
                 <p className="text-sm text-gray-700 line-clamp-3">
                   {item.content}
@@ -130,7 +145,7 @@ export default function WritefromDictionExample() {
               )}
               {item.audio && (
                 <p className="text-xs text-gray-500 mt-2">
-                  🔊 Audio available
+                  🔊 Audio: {Object.keys(item.audio).join(', ')}
                 </p>
               )}
             </div>
