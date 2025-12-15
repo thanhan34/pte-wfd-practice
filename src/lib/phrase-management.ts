@@ -139,14 +139,13 @@ export async function setNextPhrase(roomId: string): Promise<void> {
       };
     });
 
-    // Update with countdown and new phrase
+    // Update with countdown and new phrase (không phát âm thanh ngay lập tức)
     await updateDoc(roomRef, {
       targetPhrase: nextPhrase,
       currentPhraseIndex: nextIndex,
       participants: resetParticipants,
       isCountingDown: true,
-      countdownStartedAt: new Date(),
-      shouldPlayAudio: true
+      countdownStartedAt: new Date()
     });
 
     // After 3 seconds, stop countdown and allow input
@@ -154,8 +153,7 @@ export async function setNextPhrase(roomId: string): Promise<void> {
       try {
         await updateDoc(roomRef, {
           isCountingDown: false,
-          roundStartTime: new Date(),
-          shouldPlayAudio: false
+          roundStartTime: new Date()
         });
       } catch (error) {
         console.error('Error stopping countdown:', error);

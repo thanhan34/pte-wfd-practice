@@ -14,12 +14,14 @@ import {
 } from '@/lib/database';
 import { Room, User, ParticipantData } from '@/types';
 import { getUserStatus, debounce } from '@/lib/utils';
+import { getGlobalPhrases } from '@/lib/global-phrases';
 import ParticipantsList from '@/components/ParticipantsList';
 import HostControls from '@/components/HostControls';
 import ParticipantInterface from '@/components/ParticipantInterface';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import Leaderboard from '@/components/Leaderboard';
-import VoiceChat from '@/components/VoiceChat';
+import StatisticsPanel from '@/components/StatisticsPanel';
+import DetailedStatistics from '@/components/DetailedStatistics';
 
 export default function RoomPage() {
   const params = useParams();
@@ -33,15 +35,16 @@ export default function RoomPage() {
   const [error, setError] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [hasJoinedRoom, setHasJoinedRoom] = useState(false);
+  const [phraseList, setPhraseList] = useState<string[]>([]);
 
-  // Debounced typing status update
+  // Debounced typing status update - Faster response for real-time feel
   const debouncedUpdateTypingStatus = useCallback(
     (isTyping: boolean) => {
       const debouncedFn = debounce((typing: boolean) => {
         if (roomId) {
           updateTypingStatus(roomId, typing);
         }
-      }, 300);
+      }, 150); // Reduced from 300ms to 150ms for faster response
       debouncedFn(isTyping);
     },
     [roomId]
@@ -131,9 +134,23 @@ export default function RoomPage() {
     };
   }, [roomId, router, hasJoinedRoom]);
 
-  const handleSetTargetPhrase = async (phrase: string) => {
+  // Load global phrases
+  useEffect(() => {
+    const loadPhrases = async () => {
+      try {
+        const phrases = await getGlobalPhrases();
+        setPhraseList(phrases);
+      } catch (error) {
+        console.error('Error loading global phrases:', error);
+      }
+    };
+    
+    loadPhrases();
+  }, []);
+
+  const handleSetTargetPhrase = async (phrase: string, index?: number, audioUrl?: string) => {
     try {
-      await setTargetPhrase(roomId, phrase);
+      await setTargetPhrase(roomId, phrase, index, audioUrl);
     } catch (err: any) {
       setError(err.message || 'Không thể đặt câu mẫu');
     }
@@ -141,7 +158,6 @@ export default function RoomPage() {
 
   const handleToggleShowPhrase = async (show: boolean) => {
     try {
-      // We'll need to implement this function in database.ts
       await toggleShowPhraseToParticipants(roomId, show);
     } catch (err: any) {
       setError(err.message || 'Không thể thay đổi trạng thái hiển thị câu');
@@ -259,56 +275,60 @@ export default function RoomPage() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-3 gap-6">
-          {/* Left Column - Participants List */}
-          <div className="lg:col-span-1">
-            <ParticipantsList
-              participants={participants}
-              currentUserId={currentUser.id}
-              isHost={isHost}
-              roomId={room.id}
-            />
-          </div>
+      {/* Main Content - Single Column Layout */}
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        <div className="space-y-6">
+          {/* Leaderboard - Top Position */}
+          <Leaderboard
+            participants={room.participants}
+            hostId={room.hostId}
+            currentUserId={currentUser.id}
+          />
 
-          {/* Middle Column - Main Interface */}
-          <div className="xl:col-span-2 lg:col-span-2">
-            {isHost ? (
+          {/* Statistics Panel - Only for Host */}
+          {isHost && (
+            <StatisticsPanel
+              participants={participants}
+              hostId={room.hostId}
+              currentPhraseIndex={room.currentPhraseIndex}
+              totalPhrases={phraseList.length}
+              targetPhrase={room.targetPhrase}
+            />
+          )}
+
+          {/* Participants List */}
+          <ParticipantsList
+            participants={participants}
+            currentUserId={currentUser.id}
+            isHost={isHost}
+            roomId={room.id}
+          />
+
+          {/* Main Interface */}
+          {isHost ? (
+            <>
               <HostControls
                 room={room}
                 participants={participants}
                 onSetTargetPhrase={handleSetTargetPhrase}
                 onToggleShowPhrase={handleToggleShowPhrase}
               />
-            ) : (
-              <ParticipantInterface
+              
+              {/* Detailed Statistics for Host */}
+              <DetailedStatistics
                 room={room}
-                currentUser={currentUser}
-                onSubmitAnswer={handleSubmitAnswer}
-                onTypingStatusChange={handleTypingStatusChange}
+                hostId={room.hostId}
               />
-            )}
-          </div>
-
-          {/* Right Column - Leaderboard */}
-          <div className="xl:col-span-1 lg:col-span-3 xl:col-start-4">
-            <Leaderboard
-              participants={room.participants}
-              hostId={room.hostId}
-              currentUserId={currentUser.id}
+            </>
+          ) : (
+            <ParticipantInterface
+              room={room}
+              currentUser={currentUser}
+              onSubmitAnswer={handleSubmitAnswer}
+              onTypingStatusChange={handleTypingStatusChange}
             />
-          </div>
+          )}
         </div>
-      </div>
-
-      {/* Voice Chat - Fixed at bottom */}
-      <div className="fixed bottom-4 left-4 w-80 z-40">
-        <VoiceChat
-          roomId={roomId}
-          currentUserId={currentUser.id}
-          isHost={isHost}
-        />
       </div>
 
       {/* Error Display */}

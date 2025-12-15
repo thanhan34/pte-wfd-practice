@@ -62,6 +62,7 @@ function documentToRoom(doc: QueryDocumentSnapshot<DocumentData>): Room {
     id: doc.id,
     hostId: data.hostId,
     targetPhrase: data.targetPhrase || '',
+    audioUrl: data.audioUrl,
     createdAt: timestampToDate(data.createdAt),
     isActive: data.isActive || false,
     participants: data.participants || {},
@@ -169,7 +170,7 @@ export async function joinRoom(roomId: string, nickname: string): Promise<void> 
 /**
  * Set target phrase (host only)
  */
-export async function setTargetPhrase(roomId: string, phrase: string): Promise<void> {
+export async function setTargetPhrase(roomId: string, phrase: string, index?: number, audioUrl?: string): Promise<void> {
   try {
     const user = auth.currentUser;
     if (!user) throw new Error('User not authenticated');
@@ -186,18 +187,38 @@ export async function setTargetPhrase(roomId: string, phrase: string): Promise<v
       throw new Error('Only host can set target phrase');
     }
 
-    // Reset all participants' status when setting new phrase
-    const resetParticipants: { [userId: string]: any } = {};
+    // Reset only specific fields, preserve submissionHistory
+    const updateData: any = {
+      targetPhrase: phrase,
+      isCountingDown: true,
+      countdownStartedAt: serverTimestamp()
+    };
+
+    // If audioUrl is provided, add it to update data
+    if (audioUrl) {
+      updateData.audioUrl = audioUrl;
+    } else {
+      // Clear audioUrl if no audio provided
+      updateData.audioUrl = deleteField();
+    }
+
+    // If index is provided, update currentPhraseIndex
+    if (index !== undefined) {
+      updateData.currentPhraseIndex = index;
+    }
+
+    // Reset each participant's status individually without touching submissionHistory
+    const participantUpdates: { [key: string]: any } = {};
     const fieldsToDelete: { [key: string]: any } = {};
     
     Object.entries(roomData.participants).forEach(([userId, participant]: [string, any]) => {
-      resetParticipants[userId] = {
-        nickname: participant.nickname,
-        status: 'waiting',
-        isTyping: false,
-        correctCount: participant.correctCount || 0,
-        totalAttempts: participant.totalAttempts || 0
-      };
+      console.log(`🔍 RESET PARTICIPANT ${participant.nickname}:`);
+      console.log('Before reset - submissionHistory:', participant.submissionHistory);
+      console.log('Before reset - submissionHistory length:', participant.submissionHistory?.length || 0);
+      
+      // Only update status-related fields, keep everything else intact
+      participantUpdates[`participants.${userId}.status`] = 'waiting';
+      participantUpdates[`participants.${userId}.isTyping`] = false;
       
       // Add fields to delete at top level
       if (participant.submission !== undefined) {
@@ -211,13 +232,11 @@ export async function setTargetPhrase(roomId: string, phrase: string): Promise<v
       }
     });
 
-    // First update the basic data with countdown
-    await updateDoc(roomRef, {
-      targetPhrase: phrase,
-      participants: resetParticipants,
-      isCountingDown: true,
-      countdownStartedAt: serverTimestamp()
-    });
+    // Combine all updates
+    const allUpdates = { ...updateData, ...participantUpdates };
+
+    // First update the basic data with countdown and participant status
+    await updateDoc(roomRef, allUpdates);
 
     // Then delete the fields if there are any to delete
     if (Object.keys(fieldsToDelete).length > 0) {
@@ -286,6 +305,27 @@ export async function submitAnswer(roomId: string, answer: string): Promise<void
       };
     }
 
+    // Create submission history entry
+    const submissionEntry = {
+      phrase: targetPhrase,
+      answer: answer,
+      accuracy,
+      submittedAt: new Date(),
+      phraseIndex: roomData.currentPhraseIndex
+    };
+
+    // Update submission history
+    const currentHistory = currentParticipant.submissionHistory || [];
+    const updatedHistory = [...currentHistory, submissionEntry];
+    
+    // Debug logs
+    console.log('🔍 FIRESTORE SUBMIT DEBUG:');
+    console.log('Current history length:', currentHistory.length);
+    console.log('Current history:', currentHistory);
+    console.log('New submission:', submissionEntry);
+    console.log('Updated history length:', updatedHistory.length);
+    console.log('Updated history:', updatedHistory);
+
     // Update participant data
     const updatedParticipants = {
       ...roomData.participants,
@@ -298,6 +338,7 @@ export async function submitAnswer(roomId: string, answer: string): Promise<void
         isTyping: false,
         correctCount: newCorrectCount,
         totalAttempts: newTotalAttempts,
+        submissionHistory: updatedHistory,
         ...updatedTimeData
       }
     };

@@ -142,7 +142,7 @@ export async function joinRoom(roomId: string, nickname: string): Promise<void> 
 /**
  * Set target phrase (fallback)
  */
-export async function setTargetPhrase(roomId: string, phrase: string): Promise<void> {
+export async function setTargetPhrase(roomId: string, phrase: string, index?: number, audioUrl?: string): Promise<void> {
   loadFromStorage();
   const user = await authenticateUser();
   
@@ -155,22 +155,34 @@ export async function setTargetPhrase(roomId: string, phrase: string): Promise<v
     throw new Error('Only host can set target phrase');
   }
 
-  // Reset all participants' status when setting new phrase
+  // Reset only specific fields, preserve submissionHistory and other data
   Object.keys(room.participants).forEach(userId => {
     const participant = room.participants[userId];
-    room.participants[userId] = {
-      ...participant,
-      status: 'waiting',
-      isTyping: false,
-      submission: undefined,
-      accuracy: undefined,
-      submittedAt: undefined
-    };
+    console.log(`🔍 FALLBACK RESET PARTICIPANT ${participant.nickname}:`);
+    console.log('Before reset - submissionHistory:', participant.submissionHistory);
+    console.log('Before reset - submissionHistory length:', participant.submissionHistory?.length || 0);
+    
+    // Only reset status-related fields, keep everything else intact
+    participant.status = 'waiting';
+    participant.isTyping = false;
+    participant.submission = undefined;
+    participant.accuracy = undefined;
+    participant.submittedAt = undefined;
+    
+    console.log('After reset - submissionHistory:', participant.submissionHistory);
+    console.log('After reset - submissionHistory length:', participant.submissionHistory?.length || 0);
   });
 
   room.targetPhrase = phrase;
+  room.audioUrl = audioUrl; // Add audio URL
   room.isCountingDown = true;
   room.countdownStartedAt = new Date();
+  
+  // If index is provided, update currentPhraseIndex
+  if (index !== undefined) {
+    room.currentPhraseIndex = index;
+  }
+  
   roomsData[roomId] = room;
   saveToStorage();
   notifyListeners(roomId);
@@ -228,6 +240,19 @@ export async function submitAnswer(roomId: string, answer: string): Promise<void
     };
   }
 
+  // Create submission history entry
+  const submissionEntry = {
+    phrase: targetPhrase,
+    answer: answer,
+    accuracy,
+    submittedAt: new Date(),
+    phraseIndex: room.currentPhraseIndex
+  };
+
+  // Update submission history
+  const currentHistory = currentParticipant.submissionHistory || [];
+  const updatedHistory = [...currentHistory, submissionEntry];
+
   // Update participant data
   room.participants[user.id] = {
     ...room.participants[user.id],
@@ -238,6 +263,7 @@ export async function submitAnswer(roomId: string, answer: string): Promise<void
     isTyping: false,
     correctCount: newCorrectCount,
     totalAttempts: newTotalAttempts,
+    submissionHistory: updatedHistory,
     ...updatedTimeData
   };
 

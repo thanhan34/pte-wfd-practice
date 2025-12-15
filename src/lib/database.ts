@@ -68,10 +68,10 @@ export async function joinRoom(roomId: string, nickname: string): Promise<void> 
 /**
  * Set target phrase (host only)
  */
-export async function setTargetPhrase(roomId: string, phrase: string): Promise<void> {
+export async function setTargetPhrase(roomId: string, phrase: string, index?: number, audioUrl?: string): Promise<void> {
   await ensureInitialized();
   const dbModule = useFirebase ? firestoreModule : fallbackModule;
-  return dbModule.setTargetPhrase(roomId, phrase);
+  return dbModule.setTargetPhrase(roomId, phrase, index, audioUrl);
 }
 
 /**

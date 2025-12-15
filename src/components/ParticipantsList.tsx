@@ -28,6 +28,38 @@ export default function ParticipantsList({
 }: ParticipantsListProps) {
   const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
 
+  // Sắp xếp participants: người đã submit trước (theo thời gian submit sớm nhất), người chưa submit sau
+  const sortedParticipants = [...participants].sort((a, b) => {
+    const aSubmitted = a.status === 'correct' || a.status === 'incorrect';
+    const bSubmitted = b.status === 'correct' || b.status === 'incorrect';
+    
+    // Người đã submit lên trước
+    if (aSubmitted && !bSubmitted) return -1;
+    if (!aSubmitted && bSubmitted) return 1;
+    
+    // Nếu cả hai đều đã submit, sắp xếp theo thời gian submit (sớm nhất trước)
+    if (aSubmitted && bSubmitted) {
+      // Nếu có submittedAt, dùng thời gian đó
+      if (a.submittedAt && b.submittedAt) {
+        const timeA = new Date(a.submittedAt).getTime();
+        const timeB = new Date(b.submittedAt).getTime();
+        return timeA - timeB; // Sớm nhất trước (số nhỏ hơn trước)
+      }
+      // Nếu không có submittedAt, sắp xếp theo nickname
+      return a.nickname.localeCompare(b.nickname);
+    }
+    
+    // Nếu cả hai đều chưa submit, sắp xếp theo trạng thái: typing trước, waiting sau
+    if (!aSubmitted && !bSubmitted) {
+      if (a.status === 'typing' && b.status !== 'typing') return -1;
+      if (a.status !== 'typing' && b.status === 'typing') return 1;
+      // Nếu cùng trạng thái, sắp xếp theo nickname
+      return a.nickname.localeCompare(b.nickname);
+    }
+    
+    return 0;
+  });
+
   const handleRemoveParticipant = async (participantId: string) => {
     if (!isHost || participantId === currentUserId) return;
     
@@ -95,7 +127,7 @@ export default function ParticipantsList({
       </div>
 
       <div className="space-y-3">
-        {participants.map((participant) => (
+        {sortedParticipants.map((participant) => (
           <div
             key={participant.id}
             className={`p-3 rounded-lg border transition-colors ${
@@ -106,7 +138,7 @@ export default function ParticipantsList({
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className={`text-xl ${participant.status === 'typing' ? 'animate-typing' : ''}`}>
+                <span className="text-xl">
                   {getStatusIcon(participant.status)}
                 </span>
                 <div>
@@ -135,7 +167,7 @@ export default function ParticipantsList({
 
               <div className="flex items-center gap-2">
                 <div className="text-right">
-                  <span className={`${getStatusClass(participant.status)} animate-status-change`}>
+                  <span className={getStatusClass(participant.status)}>
                     {getStatusText(participant.status)}
                   </span>
                   

@@ -5,6 +5,14 @@ export interface User {
   joinedAt: Date;
 }
 
+export interface SubmissionHistory {
+  phrase: string;
+  answer: string;
+  accuracy: AccuracyResult;
+  submittedAt: Date;
+  phraseIndex?: number;
+}
+
 export interface ParticipantData {
   nickname: string;
   status: 'waiting' | 'typing' | 'submitted';
@@ -17,12 +25,14 @@ export interface ParticipantData {
   averageTime?: number; // Thời gian trung bình để hoàn thành câu đúng (ms)
   fastestTime?: number; // Thời gian nhanh nhất để hoàn thành câu đúng (ms)
   completionTimes?: number[]; // Danh sách thời gian hoàn thành các câu đúng
+  submissionHistory?: SubmissionHistory[]; // Lịch sử tất cả các lần submit
 }
 
 export interface Room {
   id: string;
   hostId: string;
   targetPhrase: string;
+  audioUrl?: string; // URL của file audio từ Firebase
   createdAt: Date;
   isActive: boolean;
   participants: { [userId: string]: ParticipantData };

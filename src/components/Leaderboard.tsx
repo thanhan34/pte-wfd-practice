@@ -109,10 +109,13 @@ export default function Leaderboard({ participants, hostId, currentUserId }: Lea
     }
   };
 
+  // Chỉ lấy top 3 người chơi
+  const top3Entries = leaderboardEntries.slice(0, 3);
+
   return (
     <div className="card">
       <h3 className="text-lg font-semibold text-gray-800 mb-4">
-        🏆 Bảng xếp hạng thời gian thực
+        🏆 Top 3 Bảng xếp hạng
       </h3>
       
       {leaderboardEntries.length === 0 ? (
@@ -122,7 +125,7 @@ export default function Leaderboard({ participants, hostId, currentUserId }: Lea
         </div>
       ) : (
         <div className="space-y-2">
-          {leaderboardEntries.map((entry, index) => {
+          {top3Entries.map((entry, index) => {
             const rank = index + 1;
             const isCurrentUser = entry.id === currentUserId;
             const rankChange = rankChanges[entry.id];

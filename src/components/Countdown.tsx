@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface CountdownProps {
   targetPhrase: string;
+  audioUrl?: string; // URL of audio file from Firebase
   countdownStartedAt: Date;
   onComplete: () => void;
 }
 
-export default function Countdown({ targetPhrase, countdownStartedAt, onComplete }: CountdownProps) {
+export default function Countdown({ targetPhrase, audioUrl, countdownStartedAt, onComplete }: CountdownProps) {
   const [timeLeft, setTimeLeft] = useState(3);
   const [isReading, setIsReading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const startTime = countdownStartedAt.getTime();
@@ -39,8 +41,57 @@ export default function Countdown({ targetPhrase, countdownStartedAt, onComplete
     return () => clearInterval(timer);
   }, [countdownStartedAt, onComplete]);
 
-  // Text-to-speech function
-  const speakPhrase = useCallback(() => {
+  // Play audio or use text-to-speech
+  const playAudio = useCallback(() => {
+    setIsReading(true);
+    
+    // If audioUrl is provided, play audio file
+    if (audioUrl) {
+      try {
+        // Stop any currently playing audio
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        
+        // Create new audio element
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        
+        audio.onended = () => {
+          setIsReading(false);
+          audioRef.current = null;
+        };
+        
+        audio.onerror = (error) => {
+          console.error('Error playing audio:', error);
+          setIsReading(false);
+          audioRef.current = null;
+          // Fallback to TTS if audio fails
+          speakPhraseWithTTS();
+        };
+        
+        audio.play().catch((error) => {
+          console.error('Error playing audio:', error);
+          setIsReading(false);
+          audioRef.current = null;
+          // Fallback to TTS if audio fails
+          speakPhraseWithTTS();
+        });
+      } catch (error) {
+        console.error('Error creating audio:', error);
+        setIsReading(false);
+        // Fallback to TTS if audio creation fails
+        speakPhraseWithTTS();
+      }
+    } else {
+      // No audioUrl provided, use TTS
+      speakPhraseWithTTS();
+    }
+  }, [audioUrl, targetPhrase]);
+  
+  // Text-to-speech fallback function
+  const speakPhraseWithTTS = useCallback(() => {
     if ('speechSynthesis' in window && targetPhrase) {
       setIsReading(true);
       
@@ -75,12 +126,12 @@ export default function Countdown({ targetPhrase, countdownStartedAt, onComplete
     }
   }, [targetPhrase]);
 
-  // Auto-speak when countdown reaches 1
+  // Auto-play audio when countdown reaches 1
   useEffect(() => {
     if (timeLeft === 1 && !isReading) {
-      speakPhrase();
+      playAudio();
     }
-  }, [timeLeft, isReading, speakPhrase]);
+  }, [timeLeft, isReading, playAudio]);
 
   const getCountdownColor = () => {
     switch (timeLeft) {
@@ -138,7 +189,7 @@ export default function Countdown({ targetPhrase, countdownStartedAt, onComplete
         {/* Manual Play Button */}
         <div className="space-y-4">
           <button
-            onClick={speakPhrase}
+            onClick={playAudio}
             disabled={isReading}
             className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               isReading 
@@ -146,11 +197,11 @@ export default function Countdown({ targetPhrase, countdownStartedAt, onComplete
                 : 'bg-primary-600 text-white hover:bg-primary-700'
             }`}
           >
-            {isReading ? '🔊 Đang đọc...' : '🔊 Nghe lại'}
+            {isReading ? '🔊 Đang phát...' : `🔊 Nghe lại${audioUrl ? ' (Audio)' : ' (TTS)'}`}
           </button>
           
           <p className="text-xs text-gray-500">
-            Câu sẽ được đọc tự động khi đếm ngược đến 1
+            {audioUrl ? 'Câu sẽ được phát audio tự động khi đếm ngược đến 1' : 'Câu sẽ được đọc tự động khi đếm ngược đến 1'}
           </p>
         </div>
         

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Room, ParticipantData, UserStatus, AccuracyResult } from '@/types';
 import { setNextPhrase, triggerAudioPlayback } from '@/lib/phrase-management';
-import { getGlobalPhrases, addGlobalPhrases, removeGlobalPhrase, updateGlobalPhrases } from '@/lib/global-phrases';
-import { parseCSV, validateCSVFile, downloadSampleCSV } from '@/lib/csv-parser';
+import { getWritefromDictionItems, subscribeToWritefromDiction, WritefromDictionItem } from '@/lib/writefromdiction';
+import Countdown from './Countdown';
 
 interface ParticipantWithStatus {
   id: string;
@@ -17,7 +17,7 @@ interface ParticipantWithStatus {
 interface HostControlsProps {
   room: Room;
   participants: ParticipantWithStatus[];
-  onSetTargetPhrase: (phrase: string) => Promise<void>;
+  onSetTargetPhrase: (phrase: string, index?: number, audioUrl?: string) => Promise<void>;
   onToggleShowPhrase: (show: boolean) => Promise<void>;
 }
 
@@ -27,173 +27,126 @@ export default function HostControls({
   onSetTargetPhrase,
   onToggleShowPhrase
 }: HostControlsProps) {
-  const [targetPhrase, setTargetPhrase] = useState('');
+  const [wfdItems, setWfdItems] = useState<WritefromDictionItem[]>([]);
   const [phraseList, setPhraseList] = useState<string[]>([]);
-  const [newPhrase, setNewPhrase] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
   const [selectedPhraseIndex, setSelectedPhraseIndex] = useState<number | null>(null);
-  const [showBulkAdd, setShowBulkAdd] = useState(false);
-  const [bulkText, setBulkText] = useState('');
-  const [csvImporting, setCsvImporting] = useState(false);
-  const [csvError, setCsvError] = useState('');
+  const [showPhraseManagement, setShowPhraseManagement] = useState(false);
+  const [dataError, setDataError] = useState<string>('');
+  
+  // Audio playback state for host
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Load global phrases
+  // Load writefromdiction data from secondary Firebase
   useEffect(() => {
-    const loadPhrases = async () => {
+    const loadInitialData = async () => {
       try {
-        const phrases = await getGlobalPhrases();
+        setLoadingData(true);
+        setDataError('');
+        const items = await getWritefromDictionItems();
+        setWfdItems(items);
+        // Extract text field as phrase list
+        const phrases = items
+          .map(item => item.text)
+          .filter((text): text is string => !!text);
         setPhraseList(phrases);
+        console.log(`✅ Loaded ${phrases.length} WFD phrases from secondary Firebase`);
       } catch (error) {
-        console.error('Error loading global phrases:', error);
+        console.error('Error loading writefromdiction data:', error);
+        setDataError('Không thể tải dữ liệu từ Firebase. Vui lòng thử lại.');
+      } finally {
+        setLoadingData(false);
       }
     };
-    
-    loadPhrases();
+
+    loadInitialData();
+
+    // Subscribe to real-time updates
+    const unsubscribe = subscribeToWritefromDiction((items) => {
+      setWfdItems(items);
+      const phrases = items
+        .map(item => item.text)
+        .filter((text): text is string => !!text);
+      setPhraseList(phrases);
+      console.log(`🔄 Real-time update: ${phrases.length} WFD phrases`);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleSetActivePhrase = async (phrase: string, index: number) => {
     setLoading(true);
     setSelectedPhraseIndex(index);
     try {
-      await onSetTargetPhrase(phrase);
+      // Get audio URL for this phrase from wfdItems (use Brian voice)
+      const wfdItem = wfdItems.find(item => item.text === phrase);
+      const brianAudioUrl = wfdItem?.audio?.Brian || '';
+      
+      console.log('🎵 Setting active phrase with Brian audio:');
+      console.log('📝 Phrase:', phrase);
+      console.log('🔍 WFD Item found:', !!wfdItem);
+      console.log('🎤 Has Brian audio:', !!brianAudioUrl);
+      
+      if (wfdItem) {
+        console.log('📊 Available voices:', Object.keys(wfdItem.audio || {}));
+        if (brianAudioUrl) {
+          console.log('✅ Brian audio URL:', brianAudioUrl.substring(0, 80) + '...');
+        } else {
+          console.warn('⚠️ No Brian audio found for this phrase!');
+        }
+      } else {
+        console.error('❌ WFD item not found for phrase:', phrase);
+      }
+      
+      // Call the parent function to set target phrase with Brian audio URL
+      await onSetTargetPhrase(phrase, index, brianAudioUrl);
+      
+      if (brianAudioUrl) {
+        console.log('✅ Successfully set phrase with Brian audio');
+      } else {
+        console.warn('⚠️ Phrase set without audio URL (will use TTS fallback)');
+      }
     } catch (error) {
-      console.error('Error setting target phrase:', error);
+      console.error('❌ Error setting target phrase:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAddPhrase = async () => {
-    if (!newPhrase.trim()) return;
-    
-    try {
-      await addGlobalPhrases([newPhrase.trim()]);
-      setNewPhrase('');
-      // Reload phrases
-      const updatedPhrases = await getGlobalPhrases();
-      setPhraseList(updatedPhrases);
-    } catch (error) {
-      console.error('Error adding phrase:', error);
-    }
-  };
-
-  const handleRemovePhrase = async (index: number) => {
-    try {
-      const phraseToRemove = phraseList[index];
-      await removeGlobalPhrase(phraseToRemove);
-      
-      // Reload phrases
-      const updatedPhrases = await getGlobalPhrases();
-      setPhraseList(updatedPhrases);
-      
-      // Reset selected index if removed phrase was selected
-      if (selectedPhraseIndex === index) {
-        setSelectedPhraseIndex(null);
-      } else if (selectedPhraseIndex !== null && selectedPhraseIndex > index) {
-        setSelectedPhraseIndex(selectedPhraseIndex - 1);
-      }
-    } catch (error) {
-      console.error('Error removing phrase:', error);
-    }
-  };
-
-  const handleEditPhrase = async (index: number, newText: string) => {
-    try {
-      const updatedList = [...phraseList];
-      updatedList[index] = newText;
-      await updateGlobalPhrases(updatedList);
-      setPhraseList(updatedList);
-    } catch (error) {
-      console.error('Error editing phrase:', error);
-    }
-  };
-
-  const handleBulkAdd = async () => {
-    if (!bulkText.trim()) return;
-    
-    setLoading(true);
-    try {
-      // Split by lines and filter out empty lines
-      const newPhrases = bulkText
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .filter(line => line.length <= 200); // Max length check
-      
-      if (newPhrases.length === 0) return;
-      
-      // Add to global phrases
-      await addGlobalPhrases(newPhrases);
-      
-      // Reload phrases
-      const updatedPhrases = await getGlobalPhrases();
-      setPhraseList(updatedPhrases);
-      
-      setBulkText('');
-      setShowBulkAdd(false);
-    } catch (error) {
-      console.error('Error bulk adding phrases:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClearBulk = () => {
-    setBulkText('');
-  };
-
-  const handleCSVImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setCsvImporting(true);
-    setCsvError('');
-
-    try {
-      // Validate and read CSV file
-      const csvContent = await validateCSVFile(file);
-      
-      // Parse CSV content
-      const parsedPhrases = parseCSV(csvContent);
-      
-      if (parsedPhrases.length === 0) {
-        setCsvError('Không tìm thấy câu hợp lệ trong file CSV');
-        return;
-      }
-
-      // Add to global phrases
-      await addGlobalPhrases(parsedPhrases);
-      
-      // Reload phrases
-      const updatedPhrases = await getGlobalPhrases();
-      setPhraseList(updatedPhrases);
-      
-      // Reset file input
-      event.target.value = '';
-      
-      // Show success message (you could add a toast here)
-      console.log(`✅ Đã import ${parsedPhrases.length} câu từ CSV`);
-      
-    } catch (error: any) {
-      setCsvError(error.message || 'Lỗi khi import CSV');
-      console.error('CSV import error:', error);
-    } finally {
-      setCsvImporting(false);
-    }
-  };
-
-  const handleDownloadSample = () => {
-    downloadSampleCSV();
   };
 
   const handleNextPhrase = async () => {
-    if (phraseList.length === 0) return;
+    if (phraseList.length === 0 || wfdItems.length === 0) return;
     
     setLoading(true);
     try {
-      await setNextPhrase(room.id);
+      // Get current index and calculate next index
+      const currentIndex = room.currentPhraseIndex !== undefined ? room.currentPhraseIndex : -1;
+      const nextIndex = (currentIndex + 1) % phraseList.length;
+      const nextPhrase = phraseList[nextIndex];
+      
+      console.log('⏭️ Setting next phrase:');
+      console.log('📝 Current index:', currentIndex);
+      console.log('📝 Next index:', nextIndex);
+      console.log('📝 Next phrase:', nextPhrase);
+      
+      // Find audioUrl for next phrase (Brian voice)
+      const wfdItem = wfdItems.find(item => item.text === nextPhrase);
+      const brianAudioUrl = wfdItem?.audio?.Brian || '';
+      
+      if (brianAudioUrl) {
+        console.log('✅ Found Brian audio for next phrase');
+        console.log('🎵 Audio URL:', brianAudioUrl.substring(0, 80) + '...');
+      } else {
+        console.warn('⚠️ No Brian audio found for next phrase - will use TTS');
+      }
+      
+      // Set the phrase with audio URL
+      await onSetTargetPhrase(nextPhrase, nextIndex, brianAudioUrl);
+      
+      console.log('✅ Successfully set next phrase with Brian audio');
     } catch (error) {
-      console.error('Error setting next phrase:', error);
+      console.error('❌ Error setting next phrase:', error);
     } finally {
       setLoading(false);
     }
@@ -201,15 +154,106 @@ export default function HostControls({
 
   const handleReplayForParticipants = async () => {
     try {
+      // Always try to get Brian's audio from wfdItems for consistency
+      let brianAudioUrl = room.audioUrl;
+      
+      if (room.targetPhrase) {
+        // Find the WFD item for current phrase
+        const wfdItem = wfdItems.find(item => item.text === room.targetPhrase);
+        
+        console.log('🔊 Replay audio for participants:');
+        console.log('📝 Target phrase:', room.targetPhrase);
+        console.log('🔍 WFD item found:', !!wfdItem);
+        
+        if (wfdItem?.audio?.Brian) {
+          brianAudioUrl = wfdItem.audio.Brian;
+          console.log('✅ Using Brian audio from Firebase');
+          console.log('🎵 Audio URL:', brianAudioUrl.substring(0, 80) + '...');
+        } else if (room.audioUrl) {
+          console.log('⚠️ No Brian audio in WFD item, using room.audioUrl');
+        } else {
+          console.warn('❌ No audio URL available - will use TTS fallback');
+        }
+      }
+      
+      // Play audio directly for host to hear
+      if (brianAudioUrl) {
+        console.log('🔊 Playing Brian audio for participants...');
+        const audio = new Audio(brianAudioUrl);
+        audio.onended = () => console.log('✅ Audio playback completed');
+        audio.onerror = (error) => console.error('❌ Audio playback error:', error);
+        
+        audio.play().catch(error => {
+          console.error('❌ Failed to play audio:', error);
+        });
+      } else {
+        console.warn('⚠️ No audio URL available - participants will use TTS');
+      }
+      
+      // Also trigger signal for participants to play audio
       await triggerAudioPlayback(room.id);
+      console.log('✅ Audio playback signal sent to participants');
     } catch (error) {
-      console.error('Error triggering audio playback:', error);
+      console.error('❌ Error triggering audio playback:', error);
     }
   };
 
-  // Text-to-speech function for host to replay phrase
-  const speakPhrase = (phrase: string) => {
+  // Play audio file or use text-to-speech for host
+  const playAudio = useCallback(() => {
+    if (!room.targetPhrase) return;
+    
+    setIsPlayingAudio(true);
+    
+    // If audioUrl is provided, play audio file
+    if (room.audioUrl) {
+      try {
+        // Stop any currently playing audio
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        
+        // Create new audio element
+        const audio = new Audio(room.audioUrl);
+        audioRef.current = audio;
+        
+        audio.onended = () => {
+          setIsPlayingAudio(false);
+          audioRef.current = null;
+        };
+        
+        audio.onerror = (error) => {
+          console.error('Error playing audio:', error);
+          setIsPlayingAudio(false);
+          audioRef.current = null;
+          // Fallback to TTS if audio fails
+          speakPhraseWithTTS(room.targetPhrase);
+        };
+        
+        audio.play().catch((error) => {
+          console.error('Error playing audio:', error);
+          setIsPlayingAudio(false);
+          audioRef.current = null;
+          // Fallback to TTS if audio fails
+          speakPhraseWithTTS(room.targetPhrase);
+        });
+      } catch (error) {
+        console.error('Error creating audio:', error);
+        setIsPlayingAudio(false);
+        // Fallback to TTS if audio creation fails
+        speakPhraseWithTTS(room.targetPhrase);
+      }
+    } else {
+      // No audioUrl provided, use TTS
+      speakPhraseWithTTS(room.targetPhrase);
+    }
+  }, [room.targetPhrase, room.audioUrl]);
+
+  // Text-to-speech fallback
+  const speakPhraseWithTTS = useCallback((phrase: string) => {
     if ('speechSynthesis' in window && phrase) {
+      setIsPlayingAudio(true);
+      
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
       
@@ -229,355 +273,242 @@ export default function HostControls({
         utterance.voice = englishVoice;
       }
       
+      utterance.onend = () => {
+        setIsPlayingAudio(false);
+      };
+      
+      utterance.onerror = () => {
+        setIsPlayingAudio(false);
+      };
+      
       window.speechSynthesis.speak(utterance);
     }
-  };
-
-  // Statistics - Exclude host from all statistics
-  const participantsOnly = participants.filter(p => p.id !== room.hostId);
-  const totalParticipants = participantsOnly.length;
-  const waitingCount = participantsOnly.filter(p => p.status === 'waiting').length;
-  const typingCount = participantsOnly.filter(p => p.status === 'typing').length;
-  const submittedCount = participantsOnly.filter(p => p.status === 'correct' || p.status === 'incorrect').length;
-  const correctCount = participantsOnly.filter(p => p.status === 'correct').length;
-
-  // Statistics Component
-  const StatisticsPanel = () => (
-    <div className="card bg-gradient-to-r from-white to-[#fedac2] border-2 border-[#fc5d01] shadow-lg">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-bold text-[#fc5d01] flex items-center gap-2">
-          📊 Thống kê thời gian thực
-        </h3>
-        {room.targetPhrase && (
-          <div className="text-xs text-[#fc5d01] bg-[#fedac2] px-3 py-1 rounded-full font-medium">
-            Câu {room.currentPhraseIndex !== undefined ? room.currentPhraseIndex + 1 : '?'}/{phraseList.length}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="text-center p-4 bg-white rounded-xl shadow-md border-2 border-gray-200 hover:border-[#fc5d01] transition-colors">
-          <div className="text-3xl font-bold text-gray-800 mb-1">{totalParticipants}</div>
-          <div className="text-sm font-medium text-gray-600">Tổng số</div>
-        </div>
-        
-        <div className="text-center p-4 bg-blue-50 rounded-xl shadow-md border-2 border-blue-200 hover:border-blue-400 transition-colors">
-          <div className="text-3xl font-bold text-blue-600 mb-1">{typingCount}</div>
-          <div className="text-sm font-medium text-blue-600">Đang gõ</div>
-        </div>
-        
-        <div className="text-center p-4 bg-[#fedac2] rounded-xl shadow-md border-2 border-[#fdbc94] hover:border-[#fc5d01] transition-colors">
-          <div className="text-3xl font-bold text-[#fc5d01] mb-1">{submittedCount}</div>
-          <div className="text-sm font-medium text-[#fd7f33]">Đã gửi</div>
-        </div>
-        
-        <div className="text-center p-4 bg-green-50 rounded-xl shadow-md border-2 border-green-200 hover:border-green-400 transition-colors">
-          <div className="text-3xl font-bold text-green-600 mb-1">{correctCount}</div>
-          <div className="text-sm font-medium text-green-600">Đúng hết</div>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      {totalParticipants > 0 && (
-        <div className="mb-4">
-          <div className="flex justify-between text-sm font-medium text-gray-700 mb-2">
-            <span>Tiến độ hoàn thành</span>
-            <span className="text-[#fc5d01] font-bold">{submittedCount}/{totalParticipants}</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-4 shadow-inner border border-gray-300">
-            <div
-              className="bg-gradient-to-r from-[#fd7f33] to-[#fc5d01] h-4 rounded-full transition-all duration-500 ease-out shadow-sm"
-              style={{ width: `${(submittedCount / totalParticipants) * 100}%` }}
-            ></div>
-          </div>
-          <div className="text-xs text-gray-600 mt-2 text-center font-medium">
-            {((submittedCount / totalParticipants) * 100).toFixed(1)}% hoàn thành
-          </div>
-        </div>
-      )}
-
-      {/* Accuracy summary */}
-      {submittedCount > 0 && (
-        <div className="pt-4 border-t-2 border-[#fdbc94]">
-          <h4 className="text-sm font-semibold text-[#fc5d01] mb-3 flex items-center gap-2">
-            🎯 Tóm tắt độ chính xác
-          </h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-green-50 p-3 rounded-lg border-2 border-green-200 hover:border-green-400 transition-colors">
-              <div className="font-bold text-green-800 text-lg">{correctCount} người</div>
-              <div className="text-green-600 font-medium">Đúng hoàn toàn ({((correctCount / submittedCount) * 100).toFixed(1)}%)</div>
-            </div>
-            <div className="bg-red-50 p-3 rounded-lg border-2 border-red-200 hover:border-red-400 transition-colors">
-              <div className="font-bold text-red-800 text-lg">{submittedCount - correctCount} người</div>
-              <div className="text-red-600 font-medium">Có sai sót ({(((submittedCount - correctCount) / submittedCount) * 100).toFixed(1)}%)</div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  }, []);
 
   return (
     <div className="space-y-6">
-      {/* Statistics Panel - Moved to top */}
-      <StatisticsPanel />
       {/* WFD Phrase Management */}
       <div className="card">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">
-          Quản lý danh sách câu WFD
-        </h3>
-
-        {/* CSV Import Section */}
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-green-800">
-              📄 Import từ file CSV
-            </h4>
-            <button
-              onClick={handleDownloadSample}
-              className="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
-            >
-              📥 Tải file mẫu
-            </button>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-800">
+            Quản lý danh sách câu WFD
+          </h3>
+          <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-lg">
+            <span className="text-xs font-medium text-blue-700">
+              🔄 Đồng bộ từ Firebase
+            </span>
           </div>
-          
-          <div className="space-y-3">
+        </div>
+
+        {/* Loading state */}
+        {loadingData && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-center gap-3">
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleCSVImport}
-                disabled={csvImporting}
-                className="text-sm text-gray-600 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-green-600 file:text-white hover:file:bg-green-700 file:cursor-pointer"
-              />
-              {csvImporting && (
-                <div className="text-xs text-green-600">
-                  Đang import...
-                </div>
-              )}
-            </div>
-            
-            {csvError && (
-              <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
-                ❌ {csvError}
-              </div>
-            )}
-            
-            <div className="text-xs text-green-700">
-              💡 <strong>Hướng dẫn:</strong> File CSV phải có câu WFD ở cột đầu tiên, mỗi câu một dòng. 
-              Tải file mẫu để xem định dạng chính xác.
-            </div>
-          </div>
-        </div>
-
-        {/* Add new phrase */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-sm font-medium text-gray-700">
-              Thêm câu WFD:
-            </label>
-            <button
-              onClick={() => setShowBulkAdd(!showBulkAdd)}
-              className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors"
-            >
-              {showBulkAdd ? 'Thêm từng câu' : 'Thêm hàng loạt'}
-            </button>
-          </div>
-
-          {!showBulkAdd ? (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newPhrase}
-                onChange={(e) => setNewPhrase(e.target.value)}
-                placeholder="Nhập câu WFD mới..."
-                className="input-field flex-1"
-                maxLength={200}
-                onKeyPress={(e) => e.key === 'Enter' && handleAddPhrase()}
-              />
-              <button
-                onClick={handleAddPhrase}
-                disabled={!newPhrase.trim()}
-                className="btn-primary whitespace-nowrap"
-              >
-                Thêm
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <textarea
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-              placeholder="Nhập nhiều câu WFD, mỗi câu một dòng:&#10;&#10;The lecture was about climate change&#10;Students should submit their assignments on time&#10;Technology has revolutionized modern education"
-                className="input-field min-h-[120px] resize-none text-sm"
-                maxLength={5000}
-              />
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-gray-500">
-                  {bulkText.split('\n').filter(line => line.trim()).length} câu sẽ được thêm
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleClearBulk}
-                    disabled={!bulkText.trim()}
-                    className="text-xs px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:bg-gray-400"
-                  >
-                    Xóa hết
-                  </button>
-                  <button
-                    onClick={handleBulkAdd}
-                    disabled={!bulkText.trim()}
-                    className="btn-primary text-xs px-4 py-1"
-                  >
-                    Thêm tất cả
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Current active phrase */}
-        {room.targetPhrase && (
-          <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-primary-600 font-medium">
-                🎯 Câu đang sử dụng:
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => speakPhrase(room.targetPhrase)}
-                  className="text-xs bg-primary-600 text-white px-3 py-1 rounded hover:bg-primary-700 transition-colors"
-                >
-                  🔊 Host nghe
-                </button>
-                <button
-                  onClick={handleReplayForParticipants}
-                  className="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
-                >
-                  📢 Phát cho tất cả
-                </button>
-                <button
-                  onClick={handleNextPhrase}
-                  disabled={loading || phraseList.length === 0}
-                  className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400"
-                >
-                  {loading ? 'Đang chuyển...' : '⏭️ Câu tiếp theo'}
-                </button>
-              </div>
-            </div>
-            <div className="text-lg font-medium text-primary-800">
-              &quot;{room.targetPhrase}&quot;
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <div className="text-xs text-primary-600">
-                Người tham gia đang thực hành với câu này
-              </div>
-              {room.currentPhraseIndex !== undefined && phraseList.length > 0 && (
-                <div className="text-xs text-primary-500">
-                  Câu {room.currentPhraseIndex + 1}/{phraseList.length}
-                </div>
-              )}
-            </div>
-            
-            {/* Toggle show phrase to participants */}
-            <div className="mt-4 pt-4 border-t border-primary-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-primary-700">
-                    👁️ Hiển thị câu cho người tham gia:
-                  </span>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                    room.showPhraseToParticipants 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {room.showPhraseToParticipants ? '✅ Đang hiển thị' : '❌ Đang ẩn'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => onToggleShowPhrase(!room.showPhraseToParticipants)}
-                  className={`text-xs px-4 py-2 rounded-lg font-medium transition-colors ${
-                    room.showPhraseToParticipants
-                      ? 'bg-red-600 text-white hover:bg-red-700'
-                      : 'bg-green-600 text-white hover:bg-green-700'
-                  }`}
-                >
-                  {room.showPhraseToParticipants ? '🙈 Ẩn câu' : '👁️ Hiện câu'}
-                </button>
-              </div>
-              <div className="text-xs text-primary-600 mt-2">
-                {room.showPhraseToParticipants 
-                  ? '💡 Người tham gia có thể thấy câu mẫu để tham khảo'
-                  : '💡 Người tham gia không thể thấy câu mẫu, phải gõ từ trí nhớ'
-                }
-              </div>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+              <span className="text-sm text-blue-700 font-medium">
+                Đang tải dữ liệu từ Firebase...
+              </span>
             </div>
           </div>
         )}
 
-        {/* Phrase list */}
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">
-            Danh sách câu WFD ({phraseList.length} câu):
-          </h4>
-          
-          {phraseList.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <div className="text-4xl mb-2">📝</div>
-              <p>Chưa có câu nào trong danh sách</p>
+        {/* Error state */}
+        {dataError && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="text-sm text-red-700 font-medium">
+              ❌ {dataError}
             </div>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {phraseList.map((phrase, index) => (
-                <div
-                  key={index}
-                  className={`p-3 border rounded-lg transition-colors ${
-                    room.targetPhrase === phrase
-                      ? 'border-primary-300 bg-primary-50'
-                      : 'border-gray-200 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-900 break-words">
-                        &quot;{phrase}&quot;
-                      </div>
-                      {room.targetPhrase === phrase && (
-                        <div className="text-xs text-primary-600 mt-1 font-medium">
-                          ✓ Đang sử dụng
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="flex gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => handleSetActivePhrase(phrase, index)}
-                        disabled={loading || room.targetPhrase === phrase}
-                        className={`text-xs px-2 py-1 rounded transition-colors ${
-                          room.targetPhrase === phrase
-                            ? 'bg-primary-200 text-primary-700 cursor-not-allowed'
-                            : 'bg-primary-600 text-white hover:bg-primary-700'
-                        }`}
-                      >
-                        {loading && selectedPhraseIndex === index ? 'Đang đặt...' : 'Sử dụng'}
-                      </button>
-                      
-                      <button
-                        onClick={() => handleRemovePhrase(index)}
-                        className="text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                      >
-                        Xóa
-                      </button>
-                    </div>
+          </div>
+        )}
+
+        {/* Main Controls - Always Visible */}
+        <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
+          {/* Countdown for Host */}
+          {room.isCountingDown && room.countdownStartedAt && room.targetPhrase && (
+            <div className="mb-4">
+              <Countdown
+                targetPhrase={room.targetPhrase}
+                audioUrl={room.audioUrl}
+                countdownStartedAt={room.countdownStartedAt}
+                onComplete={() => {
+                  // Sau khi countdown kết thúc, phát câu cho participants
+                  if (room.targetPhrase) {
+                    handleReplayForParticipants();
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-primary-600 font-medium">
+              🎯 Điều khiển chính:
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={playAudio}
+                disabled={!room.targetPhrase || isPlayingAudio}
+                className={`text-sm px-4 py-2 rounded hover:bg-primary-700 transition-colors ${
+                  isPlayingAudio
+                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                    : 'bg-primary-600 text-white'
+                }`}
+              >
+                {isPlayingAudio ? '🔊 Đang phát...' : `🔊 Host nghe${room.audioUrl ? ' (Audio)' : ' (TTS)'}`}
+              </button>
+              <button
+                onClick={handleReplayForParticipants}
+                disabled={!room.targetPhrase}
+                className="text-sm bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:bg-gray-400"
+              >
+                📢 Phát câu hiện tại
+              </button>
+              <button
+                onClick={handleNextPhrase}
+                disabled={loading || phraseList.length === 0 || loadingData}
+                className="text-sm bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+              >
+                {loading ? 'Đang chuyển...' : '⏭️ Câu tiếp theo'}
+              </button>
+            </div>
+          </div>
+
+          {/* Toggle show phrase to participants - Always Visible */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-primary-700">
+                👁️ Hiển thị câu cho người tham gia:
+              </span>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                room.showPhraseToParticipants 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {room.showPhraseToParticipants ? '✅ Đang hiển thị' : '❌ Đang ẩn'}
+              </span>
+            </div>
+            <button
+              onClick={() => onToggleShowPhrase(!room.showPhraseToParticipants)}
+              className={`text-sm px-4 py-2 rounded-lg font-medium transition-colors ${
+                room.showPhraseToParticipants
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {room.showPhraseToParticipants ? '🙈 Ẩn câu' : '👁️ Hiện câu'}
+            </button>
+          </div>
+
+          {/* Current phrase status */}
+          {room.targetPhrase ? (
+            <div className="space-y-3">
+             
+
+              {/* Show target phrase preview for host when enabled */}
+              {room.showPhraseToParticipants && (
+                <div className="p-4 bg-red-50 border-2 border-red-200 rounded-lg">
+                  <div className="text-sm font-medium text-red-600 mb-2 flex items-center gap-2">
+                    👁️ Câu mẫu đang hiển thị cho người tham gia:
+                  </div>
+                  <div className="text-lg font-bold text-gray-800 bg-red-100 p-3 rounded-lg border border-red-300">
+                    &quot;{room.targetPhrase}&quot;
+                  </div>
+                  <div className="text-xs text-red-600 mt-2 font-medium">
+                    ✅ Người tham gia có thể thấy câu này để tham khảo
                   </div>
                 </div>
-              ))}
+              )}
+            </div>
+          ) : (
+            <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="text-sm text-yellow-800 font-medium">
+                ⚠️ Chưa có câu nào được đặt
+              </div>
+              <div className="text-xs text-yellow-700 mt-1">
+                Hãy chọn một câu từ danh sách bên dưới
+              </div>
             </div>
           )}
         </div>
-      </div>
 
+        {/* Toggle button for phrase list */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowPhraseManagement(!showPhraseManagement)}
+            disabled={loadingData}
+            className="w-full flex items-center justify-between p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <span className="text-sm font-medium text-gray-700">
+              📝 Danh sách câu WFD ({phraseList.length} câu)
+            </span>
+            <span className="text-gray-500">
+              {showPhraseManagement ? '🔼 Ẩn' : '🔽 Hiện'}
+            </span>
+          </button>
+        </div>
+
+        {/* Collapsible phrase list section */}
+        {showPhraseManagement && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-medium text-gray-700">
+                Danh sách câu WFD từ Firebase:
+              </h4>
+              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                {phraseList.length} câu có sẵn
+              </div>
+            </div>
+            
+            {phraseList.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <div className="text-4xl mb-2">📝</div>
+                <p className="font-medium">Chưa có câu nào trong database</p>
+                <p className="text-xs mt-1">Dữ liệu sẽ tự động cập nhật từ Firebase</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {phraseList.map((phrase, index) => (
+                  <div
+                    key={index}
+                    className={`p-3 border rounded-lg transition-colors ${
+                      room.targetPhrase === phrase
+                        ? 'border-primary-300 bg-primary-50'
+                        : 'border-gray-200 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-900 break-words">
+                          &quot;{phrase}&quot;
+                        </div>
+                        {room.targetPhrase === phrase && (
+                          <div className="text-xs text-primary-600 mt-1 font-medium">
+                            ✓ Đang sử dụng
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="flex gap-1 flex-shrink-0">
+                        <button
+                          onClick={() => handleSetActivePhrase(phrase, index)}
+                          disabled={loading || room.targetPhrase === phrase}
+                          className={`text-xs px-3 py-1.5 rounded transition-colors font-medium ${
+                            room.targetPhrase === phrase
+                              ? 'bg-primary-200 text-primary-700 cursor-not-allowed'
+                              : 'bg-primary-600 text-white hover:bg-primary-700'
+                          }`}
+                        >
+                          {loading && selectedPhraseIndex === index ? 'Đang đặt...' : 'Sử dụng'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Instructions */}
       <div className="card bg-primary-50 border-primary-200">
@@ -587,7 +518,7 @@ export default function HostControls({
         <div className="space-y-2 text-sm text-primary-700">
           <div className="flex items-start gap-2">
             <span className="font-medium">1.</span>
-            <span>Tạo danh sách các câu WFD để luyện tập</span>
+            <span>Danh sách câu WFD được tải tự động từ Firebase (PTE Shadowing database)</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="font-medium">2.</span>
@@ -608,6 +539,10 @@ export default function HostControls({
           <div className="flex items-start gap-2">
             <span className="font-medium">6.</span>
             <span>Sử dụng nút &quot;Phát lại&quot; để cho người tham gia nghe lại câu nếu cần</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="font-medium">7.</span>
+            <span>Dữ liệu tự động cập nhật khi có thay đổi trên Firebase</span>
           </div>
         </div>
       </div>

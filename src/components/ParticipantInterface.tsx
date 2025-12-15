@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Room, User, AccuracyResult } from '@/types';
 import Countdown from './Countdown';
 import CelebrationEffect from './CelebrationEffect';
@@ -27,6 +27,7 @@ export default function ParticipantInterface({
   }>>([]);
   const [showCelebration, setShowCelebration] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const currentParticipant = room.participants[currentUser.id];
   const isSubmitted = currentParticipant?.status === 'submitted';
@@ -46,16 +47,66 @@ export default function ParticipantInterface({
     }
   }, [isSubmitted, room.targetPhrase, submissionHistory]);
 
-  // Audio playback when host triggers
-  useEffect(() => {
-    if (room.shouldPlayAudio && room.targetPhrase) {
-      speakPhrase(room.targetPhrase);
-    }
-  }, [room.shouldPlayAudio, room.targetPhrase]);
+  // Audio playback state
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Text-to-speech function
-  const speakPhrase = (phrase: string) => {
+  // Play audio file or use text-to-speech
+  const playAudio = useCallback(() => {
+    if (!room.targetPhrase) return;
+    
+    setIsPlayingAudio(true);
+    
+    // If audioUrl is provided, play audio file
+    if (room.audioUrl) {
+      try {
+        // Stop any currently playing audio
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.currentTime = 0;
+        }
+        
+        // Create new audio element
+        const audio = new Audio(room.audioUrl);
+        audioRef.current = audio;
+        
+        audio.onended = () => {
+          setIsPlayingAudio(false);
+          audioRef.current = null;
+        };
+        
+        audio.onerror = (error) => {
+          console.error('Error playing audio:', error);
+          setIsPlayingAudio(false);
+          audioRef.current = null;
+          // Fallback to TTS if audio fails
+          speakPhraseWithTTS(room.targetPhrase);
+        };
+        
+        audio.play().catch((error) => {
+          console.error('Error playing audio:', error);
+          setIsPlayingAudio(false);
+          audioRef.current = null;
+          // Fallback to TTS if audio fails
+          speakPhraseWithTTS(room.targetPhrase);
+        });
+      } catch (error) {
+        console.error('Error creating audio:', error);
+        setIsPlayingAudio(false);
+        // Fallback to TTS if audio creation fails
+        speakPhraseWithTTS(room.targetPhrase);
+      }
+    } else {
+      // No audioUrl provided, use TTS
+      speakPhraseWithTTS(room.targetPhrase);
+    }
+  }, [room.targetPhrase, room.audioUrl]);
+
+  // Text-to-speech fallback
+  const speakPhraseWithTTS = useCallback((phrase: string) => {
     if ('speechSynthesis' in window && phrase) {
+      setIsPlayingAudio(true);
+      
       // Cancel any ongoing speech
       window.speechSynthesis.cancel();
       
@@ -75,9 +126,17 @@ export default function ParticipantInterface({
         utterance.voice = englishVoice;
       }
       
+      utterance.onend = () => {
+        setIsPlayingAudio(false);
+      };
+      
+      utterance.onerror = () => {
+        setIsPlayingAudio(false);
+      };
+      
       window.speechSynthesis.speak(utterance);
     }
-  };
+  }, []);
 
   // Save submission to history only when fully correct and trigger celebration
   useEffect(() => {
@@ -111,10 +170,23 @@ export default function ParticipantInterface({
   const handleInputChange = (value: string) => {
     setAnswer(value);
     
-    // Update typing status
+    // Update typing status with immediate local feedback
     const isTypingNow = value.length > 0 && !hasSubmitted;
     setIsTyping(isTypingNow);
+    
+    // Send typing status to server (debounced)
     onTypingStatusChange(isTypingNow);
+    
+    // Auto-stop typing after 2 seconds of no input
+    if (isTypingNow) {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false);
+        onTypingStatusChange(false);
+      }, 2000);
+    }
   };
 
   const handleSubmit = async () => {
@@ -269,17 +341,6 @@ export default function ParticipantInterface({
         onComplete={() => setShowCelebration(false)} 
       />
 
-      {/* Show countdown overlay when counting down */}
-      {room.isCountingDown && room.countdownStartedAt && room.targetPhrase && (
-        <Countdown
-          targetPhrase={room.targetPhrase}
-          countdownStartedAt={room.countdownStartedAt}
-          onComplete={() => {
-            // Countdown completed, user can now start typing
-            console.log('Countdown completed');
-          }}
-        />
-      )}
       
       <div className="space-y-6">
       {/* Status Card with enhanced design */}
@@ -349,6 +410,43 @@ export default function ParticipantInterface({
                   ? '💡 Host đã cho phép bạn xem câu mẫu để tham khảo'
                   : '💡 Bạn không thể thấy câu mẫu. Hãy gõ chính xác những gì bạn nhớ được.'
                 }
+              </div>
+              
+              {/* Audio Playback Button - Prominent position */}
+              <div className="mt-4">
+                <button
+                  onClick={playAudio}
+                  disabled={isPlayingAudio}
+                  className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-300 shadow-md ${
+                    isPlayingAudio
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    {isPlayingAudio ? (
+                      <>
+                        <div className="flex items-center gap-1">
+                          <div className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '0ms' }}></div>
+                          <div className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '150ms' }}></div>
+                          <div className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                        </div>
+                        <span>Đang phát...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xl">🔊</span>
+                        <span>Nghe lại câu {room.audioUrl ? '(Audio)' : '(TTS)'}</span>
+                      </>
+                    )}
+                  </div>
+                </button>
+                <p className="text-xs text-center text-gray-500 mt-2">
+                  {room.audioUrl 
+                    ? '🎵 Audio chất lượng cao từ Firebase' 
+                    : '🤖 Text-to-Speech'
+                  }
+                </p>
               </div>
             </div>
           )}
@@ -449,6 +547,24 @@ export default function ParticipantInterface({
             </div>
           </button>
 
+          {/* Try again button - Show right after submit button if not fully correct */}
+          {hasSubmitted && accuracy && !accuracy.isFullyCorrect && (
+            <div className="mt-3">
+              <button
+                onClick={handleTryAgain}
+                className="w-full py-3 px-6 rounded-xl text-base font-semibold transition-all duration-300 shadow-md transform bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span>🔄</span>
+                  <span>Thử lại câu này</span>
+                </div>
+              </button>
+              <p className="text-sm text-gray-600 mt-2 text-center">
+                💡 Bạn có thể thử lại cho đến khi đúng hoàn toàn
+              </p>
+            </div>
+          )}
+
           {/* Show result if submitted */}
           {hasSubmitted && accuracy && (
             <div className="mt-6">
@@ -456,21 +572,6 @@ export default function ParticipantInterface({
                 Kết quả câu vừa rồi:
               </h4>
               {renderAccuracyResult(accuracy)}
-              
-              {/* Try again button if not fully correct */}
-              {!accuracy.isFullyCorrect && (
-                <div className="mt-4 text-center">
-                  <button
-                    onClick={handleTryAgain}
-                    className="btn-secondary px-6 py-2"
-                  >
-                    🔄 Thử lại câu này
-                  </button>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Bạn có thể thử lại cho đến khi đúng hoàn toàn
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 
+// Primary Firebase Configuration (Practice Room)
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -12,7 +13,17 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
+// Secondary Firebase Configuration (PTE Shadowing)
+const secondaryFirebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_SECONDARY_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_SECONDARY_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_SECONDARY_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_SECONDARY_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_SECONDARY_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_SECONDARY_APP_ID,
+};
+
+// Initialize Primary Firebase
 let app: any = null;
 let db: any = null;
 let auth: any = null;
@@ -33,13 +44,36 @@ try {
     });
   }
   
-  console.log('✅ Firebase initialized successfully');
+  console.log('✅ Primary Firebase initialized successfully');
 } catch (error) {
-  console.error('❌ Firebase initialization failed:', error);
+  console.error('❌ Primary Firebase initialization failed:', error);
   throw error;
 }
 
-export { db, auth };
+// Initialize Secondary Firebase
+let secondaryApp: any = null;
+let secondaryDb: any = null;
+
+try {
+  secondaryApp = initializeApp(secondaryFirebaseConfig, 'secondary');
+  
+  // Initialize Firestore for secondary app
+  secondaryDb = getFirestore(secondaryApp);
+  
+  // Enable offline persistence for secondary db
+  if (typeof window !== 'undefined') {
+    import('firebase/firestore').then(({ enableNetwork }) => {
+      enableNetwork(secondaryDb).catch(console.warn);
+    });
+  }
+  
+  console.log('✅ Secondary Firebase initialized successfully');
+} catch (error) {
+  console.error('❌ Secondary Firebase initialization failed:', error);
+  throw error;
+}
+
+export { db, auth, secondaryDb };
 export default app;
 
 // Helper function to check Firebase connection
