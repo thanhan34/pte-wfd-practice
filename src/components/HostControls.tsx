@@ -331,10 +331,8 @@ export default function HostControls({
                 audioUrl={room.audioUrl}
                 countdownStartedAt={room.countdownStartedAt}
                 onComplete={() => {
-                  // Sau khi countdown kết thúc, phát câu cho participants
-                  if (room.targetPhrase) {
-                    handleReplayForParticipants();
-                  }
+                  // Countdown đã tự động phát audio, không cần phát lại
+                  console.log('✅ Countdown hoàn thành, audio đã được phát');
                 }}
               />
             </div>
